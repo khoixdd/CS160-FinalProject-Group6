@@ -32,7 +32,21 @@ private:
 // until owner D implements the array. Do not claim it works as shipped.
 
 template <typename T>
-DynamicArray<T>::DynamicArray() : data_(nullptr), size_(0), capacity_(0) {
-    
+DynamicArray<T>::DynamicArray() : data_(nullptr), size_(0), capacity_(0) {}
+
+template <typename T>
+DynamicArray<T>::~DynamicArray() {
+    delete data_[];
 }
+
+template <typename T>
+DynamicArray<T>::DynamicArray(const DynamicArray &other) : data_(nullptr), size_(other.size_), capacity_(other.capacity_) {
+    if (other.size() > 0) {
+        this->data_ = new int[capacity];
+
+        for (size_t i = 0; i < this->size_; ++i)
+            this->data_[i] = other[i];
+    }
+} 
+
 #endif
