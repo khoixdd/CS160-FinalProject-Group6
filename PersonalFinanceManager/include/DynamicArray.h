@@ -30,4 +30,9 @@ private:
 // IMPORTANT: As a template, method definitions normally belong in this header.
 // This file deliberately contains no method bodies; corresponding tests must fail
 // until owner D implements the array. Do not claim it works as shipped.
+
+template <typename T>
+DynamicArray<T>::DynamicArray() : data_(nullptr), size_(0), capacity_(0) {
+    
+}
 #endif
