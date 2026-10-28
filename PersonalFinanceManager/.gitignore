@@ -1,0 +1,14 @@
+# This repository tracks SOURCE CODE and C++ tests only.
+/build/
+/data/
+*.dat
+*.tmp
+*.o
+*.exe
+*.out
+*.log
+# Management documents are kept in ../MANAGEMENT/ outside this Git repository.
+*.md
+*.pdf
+*.zip
+.DS_Store

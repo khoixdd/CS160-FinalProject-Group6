@@ -1,0 +1,14 @@
+# Final submission preparation
+/SUBMISSION_STAGING/
+
+# Compiled files
+**/build/
+*.exe
+*.o
+*.out
+
+# Runtime data
+**/data/*.dat
+
+# Editor files
+.vscode/
