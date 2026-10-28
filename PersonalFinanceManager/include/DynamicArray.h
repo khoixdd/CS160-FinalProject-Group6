@@ -49,4 +49,5 @@ DynamicArray<T>::DynamicArray(const DynamicArray &other) : data_(nullptr), size_
     }
 } 
 
+template <typename T>
 #endif
