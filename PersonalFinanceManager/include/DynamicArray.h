@@ -126,7 +126,7 @@ void DynamicArray<T>::grow() {
 
     T* newArr = new T[newCap];
     for (int i = 0; i < size_; ++i)
-        newArr[i] = std:move(data_[i]);
+        newArr[i] = std::move(data_[i]);
 
     delete[] data_;
     data_ = newArr;
