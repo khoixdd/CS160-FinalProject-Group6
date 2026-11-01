@@ -65,8 +65,8 @@ DynamicArray<T>& DynamicArray<T>::operator=(const DynamicArray& other) {
         std::swap(size_, tmp.size_);
         std::swap(capacity_, tmp.capacity_);
 
-        return *this;
     }
+    return *this;
 }
 
 template <typename T>
