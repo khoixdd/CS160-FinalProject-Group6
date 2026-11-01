@@ -1,6 +1,10 @@
 #ifndef PFM_DYNAMIC_ARRAY_H
 #define PFM_DYNAMIC_ARRAY_H
 
+#include <exception>
+#include <limits>
+#include <stdexcept>
+#include <utility>
 // Owner D - W1-D-03 / W2-D-01.
 // INCOMPLETE SCAFFOLD: implement ALL special members and methods before use.
 // Store T items in manually allocated new T[] / delete[] memory.
@@ -60,6 +64,8 @@ DynamicArray<T>& DynamicArray<T>::operator=(const DynamicArray& other) {
         std::swap(data_, tmp.data_);
         std::swap(size_, tmp.size_);
         std::swap(capacity_, tmp.capacity_);
+
+        return *this;
     }
 }
 
@@ -101,6 +107,8 @@ bool DynamicArray<T>::eraseAt(int id) {
 
     size_--;
     data_[size_] = T();
+
+    return true;
 }
 
 template <typename T>
