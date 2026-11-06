@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <string>
-#include "..\include\DynamicArray.h"
+#include "../include/DynamicArray.h"
 
 void fillArray (int n, DynamicArray<int> &arr) {
     for (int i = 1; i <= n; ++i) {
@@ -60,9 +60,9 @@ void testAssignInitialization () {
     tmp = arr;
 
     assert(tmp.size() == arr.size());
-    assert(tmp.capacity() == tmp.capacity());
+    assert(tmp.capacity() >= tmp.size());
 
-    for (int i = 1; i < tmp.size(); ++i)
+    for (int i = 0; i < tmp.size(); ++i)
         assert(tmp.at(i) == arr.at(i));
 }
 
@@ -159,7 +159,7 @@ void testEraseMiddle () {
 
     assert(arr.eraseAt(1) == true);
  
-    int expected[] = {1, 3, 4};
+    int expected[] = {1, 3, 4, 5};
     
     assert(arr.size() == beforeEraseSize - 1);
 
@@ -205,7 +205,32 @@ void testAtInvalidIndexes () {
     bool ok = arr.eraseAt(-1);
     assert(ok == false);
     ok = arr.eraseAt(0);
-    assert (ok == false);
+    assert(ok == false);
+
+    bool thrown = false;
+    try {
+        arr.at(0);
+    } catch (const std::out_of_range&) { 
+        thrown = true; 
+    }
+    assert(thrown);
+
+    fillArray(3, arr);
+    thrown = false;
+    try {
+        arr.at(-1);
+    } catch (const std::out_of_range&) { 
+        thrown = true; 
+    }
+    assert(thrown);
+
+    thrown = false;
+    try {
+        arr.at(3); 
+    } catch (const std::out_of_range&) { 
+        thrown = true;
+    }
+    assert(thrown);
 }
 
 void testStringElements () {
@@ -221,6 +246,70 @@ void testStringElements () {
     assert(arr.eraseAt(0));
     assert(arr.size() == 1);
     assert(arr.at(0) == "category");
+}
+
+void testCopyCtorIsDeepCopy () {
+    DynamicArray<int> a;
+    fillArray(5, a);
+    DynamicArray<int> b(a);
+
+    assert(&a.at(0) != &b.at(0));
+
+    b.at(2) = 999;
+    assert(a.at(2) == 3);
+    a.at(4) = -5;
+    assert(b.at(4) == 5);
+
+    for (int i = 0; i < 100; ++i) b.pushBack(i);
+    assert(a.size() == 5);
+    assert(b.size() == 105);
+}
+
+void testAssignIsDeepCopy () {
+    DynamicArray<int> a;
+    fillArray(6, a);
+
+    DynamicArray<int> b;
+    fillArray(20, b);  
+    b = a;
+
+    assert(b.size() == 6);
+    assert(&a.at(0) != &b.at(0));
+    b.at(0) = 100;
+    assert(a.at(0) == 1);
+
+    DynamicArray<int> empty;
+    b = empty;
+    assert(b.size() == 0);
+    assert(b.pushBack(7));
+    assert(b.at(0) == 7);
+
+    DynamicArray<int> c, d;
+    d = c = a;
+    assert(c.size() == 6 && d.size() == 6);
+    assert(&c.at(0) != &d.at(0));
+}
+
+void testConstAt () {
+    DynamicArray<int> arr;
+    fillArray(3, arr);
+    const DynamicArray<int>& c = arr;
+
+    assert(c.at(1) == 2);
+    bool thrown = false;
+    try {
+        c.at(3);
+    } catch (const std::out_of_range&) {
+        thrown = true; 
+    }
+    assert(thrown);
+}
+
+void testPushBackSelf () {
+    DynamicArray<int> arr;
+    fillArray(4, arr);
+    assert(arr.pushBack(arr.at(0)));
+    assert(arr.size() == 5 && arr.at(4) == 1);
 }
 
 int main() {
@@ -258,6 +347,27 @@ int main() {
 
     testStringElements();
     std::cout << "Element string type PASSED\n";
+
+    testAssignInitialization();
+    std::cout << "Assignment Test PASSED\n";
+
+    testEraseMiddle();
+    std::cout << "Erase middle Test PASSED\n";
+
+    testAtChangeValue();
+    std::cout << "At change value Test PASSED\n";
+
+    testConstAt();
+    std::cout << "Const at Test PASSED\n";
+
+    testPushBackSelf();
+    std::cout << "PushBack an element in itself Test PASSED\n";
+
+    testCopyCtorIsDeepCopy();
+    std::cout << "Copy ctor deep copy Test PASSED\n";
+
+    testAssignIsDeepCopy();
+    std::cout << "Assign deep copy Test PASSED\n";
 
     std::cout << "\n\n";
     std::cout << "All tests passed\n";
