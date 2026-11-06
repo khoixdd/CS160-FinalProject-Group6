@@ -86,11 +86,36 @@ static void testSingleDayAndReversed() {
     Date b; b.year = 2026; b.month = 1; b.day = 1;
     CHECK_EQ(summarizeRange(s, a, b, r), false);
 }
+// W2-C-01: empty range (no transactions) -> 0 / 0 / 0, still a valid range.
+static void testEmptyRange() {
+    AppState s;
+    buildFixture(s);
+    Date from; from.year = 2024; from.month = 1;  from.day = 1;
+    Date to;   to.year = 2024;   to.month = 12;   to.day = 31;
+    MoneySummary r;
+    CHECK_EQ(summarizeRange(s, from, to, r), true);
+    CHECK_EQ(r.income, 0);
+    CHECK_EQ(r.expense, 0);
+    CHECK_EQ(r.net, 0);
+}
 
+// W2-C-01: negative net. 2026-01-02 has only a 150 expense -> 0 / 150 / -150.
+static void testNegativeNet() {
+    AppState s;
+    buildFixture(s);
+    Date d; d.year = 2026; d.month = 1; d.day = 2;
+    MoneySummary r;
+    CHECK_EQ(summarizeRange(s, d, d, r), true);
+    CHECK_EQ(r.income, 0);
+    CHECK_EQ(r.expense, 150);
+    CHECK_EQ(r.net, -150);
+}
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
     testSingleDayAndReversed();
+    testEmptyRange();
+    testNegativeNet();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
