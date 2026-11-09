@@ -1,240 +1,109 @@
-# Verification & Acceptance Test Plan - 32 Cases
+# Test Plan
 
-**Do not write PASS before actually executing a test.** This is a test specification; generated source test files are intentionally unfinished until the assigned member implements them. Use the file under `../PersonalFinanceManager/tests/` shown for each case.
+A test checks one input against an expected result. The T numbers below are reference labels, not a requirement to build a large test framework.
 
-**Execution record fields:** Date | Test ID | Build/commit hash | Environment | Setup/Input | Expected | Actual | PASS/FAIL | Owner | Reviewer. Store local results under `MANAGEMENT/weekly_reports/` or a separately shared test log; only C++ test code needs to be on GitHub.
+## How to run
 
-## 1. How to run
+From `PersonalFinanceManager/`:
 
 ```bash
-cd PersonalFinanceManager
-make clean && make
+make
 make test
-make run
 ```
 
-**Warning:** in the provided repository scaffold, `make test` intentionally FAILS with `NOT IMPLEMENTED` until real tests replace each stub. Do not report stub failure as a project regression or stub success as genuine coverage.
+Each C++ test is a separate executable. Run one integration test at a time. It uses `build/integration_test.bin`, refuses to overwrite an existing file there, and removes its own file when finished. It does not use personal `data/finance.bin`.
 
-## 2. Shared numeric fixture (independent expected values)
+For a single test, use `make build/test_recurring` and then `./build/test_recurring`. See [CLI Checks](CLI_TEST_CASES.md) for menu tests.
 
-All money below is **whole VND**, per proposed [DECISIONS.md](DECISIONS.md). Each test starts with a fresh temporary AppState unless otherwise stated.
+The latest local run passed all seven existing test programs. This is not a claim that all 32 checks below passed. Some reports are still missing, and some checks require manual review or a final submission package.
 
-| Wallet | ID (illustrative) | Opening balance |
-|---|---:|---:|
-| Cash | 1 | 100 |
-| Bank | 2 | 50 |
+## Shared example data
 
-| Tx | Date | Kind | Source/Category | Wallet | Amount |
-|---|---|---|---|---|---:|
-| 1 | 2025-12-31 | Income | Salary | Cash | 1000 |
-| 2 | 2025-12-31 | Expense | Food | Cash | 200 |
-| 3 | 2026-01-01 | Income | Gift | Bank | 500 |
-| 4 | 2026-01-01 | Expense | Transport | Bank | 70 |
-| 5 | 2026-01-02 | Expense | Food | Cash | 150 |
+For report tests, create Cash with opening balance 100, Bank with 50, sources Salary/Gift, and categories Food/Transport. Add these records:
 
-**Manual calculations:** total income `1500`, expenses `420`, net `1080`; Cash `100 + 1000 - 200 - 150 = 750`; Bank `50 + 500 - 70 = 480`; Dashboard overall balance `1230`. **Income Source:** Salary `1000`, Gift `500`. **Expense Category:** Food `350`, Transport `70`.
+| Date | Type | Source or category | Wallet | Amount |
+|---|---|---|---|---:|
+| 2025-12-31 | Income | Salary | Cash | 1000 |
+| 2025-12-31 | Expense | Food | Cash | 200 |
+| 2026-01-01 | Income | Gift | Bank | 500 |
+| 2026-01-01 | Expense | Transport | Bank | 70 |
+| 2026-01-02 | Expense | Food | Cash | 150 |
 
-## 3. Required acceptance cases
+Work out the expected values before calling a report:
 
-### T01 | F05-F07 | Owner B
-- [ ] **Procedure / setup:** Create one Wallet, ExpenseCategory, and IncomeSource; edit their names and list all.
-- [ ] **Expected:** Each record keeps one positive unique ID; updated names display; original ID remains.
-- [ ] **Implement in:** `test_master_data.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+- All dates: income 1500, expenses 420, net 1080.
+- Cash balance: `100 + 1000 - 200 - 150 = 750`.
+- Bank balance: `50 + 500 - 70 = 480`.
+- Dashboard total: `750 + 480 = 1230`.
+- Source totals: Salary 1000, Gift 500. Category totals: Food 350, Transport 70.
 
-### T02 | F05-F07 | Owner B
-- [ ] **Procedure / setup:** Reference one master record in Transaction or RecurringRule; attempt deletion; separately delete an unused record.
-- [ ] **Expected:** Referenced deletion rejected without changing data; unused deletion succeeds under approved policy.
-- [ ] **Implement in:** `test_master_data.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+Opening balances affect the Dashboard, not report income. Existing test files may use different source/category names; use the full example above for breakdown checks.
 
-### T03 | F01 | Owner B
-- [ ] **Procedure / setup:** Create Source=Salary, Wallet=Cash, income on 2025-12-31, amount 1000, note with spaces.
-- [ ] **Expected:** Transaction stores Source ID, Wallet ID, date, amount 1000, full note; displayed Salary and Cash.
-- [ ] **Implement in:** `test_transactions.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+## Record and report checks
 
-### T04 | F01 | Owner B
-- [ ] **Procedure / setup:** Rename Salary to Employment Income after adding T03 transaction; list transactions.
-- [ ] **Expected:** Displayed source name changes; existing transaction ID reference and amount unchanged.
-- [ ] **Implement in:** `test_transactions.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+| Check | What to try | Expected result | Owner |
+|---|---|---|---|
+| T01 | Add, rename, and list each master type | Names change; IDs remain stable and unique | Hoàng Anh |
+| T02 | Delete a referenced master record, then an unused one | Referenced record is kept; unused record can be deleted | Hoàng Anh |
+| T03 | Add income 1000 with a date, source, wallet, and note containing spaces | All fields are stored; screen shows source/wallet names | Hoàng Anh + Khôi |
+| T04 | Rename its source and display the transaction again | New name appears; stored ID and amount are unchanged | Hoàng Anh + Khôi |
+| T05 | Add expense 200 for Food/Cash | Correct expense kind, category/wallet IDs and names | Hoàng Anh + Khôi |
+| T06 | Try missing IDs, invalid dates, amount 0, and a negative amount | No transaction is added and counters/balances are unchanged | Hoàng Anh |
+| T07 | Calculate Dashboard for the shared example | Cash 750, Bank 480, total 1230 | Khôi |
+| T08 | Report 2026-01-01 through 2026-01-02 | Income 500, expenses 220, net 280 | Tuấn |
+| T09 | Report 2025-12-31 only, then reverse the endpoints | Single day: 1000/200/800; reversed range rejected | Tuấn |
+| T10 | Report by wallet across all example dates | Cash income/expense 1000/350; Bank 500/70; include zero-activity wallets | Tuấn |
+| T11 | Select 2025 and 2026 | 2025: 1000/200/800; 2026: 500/220/280; combined: 1500/420/1080 | Tuấn |
+| T12 | Select 2025, 2026, 2026; also select an empty year | No double counting; empty year has zero totals | Tuấn |
+| T13 | Income by source for both years | Salary 1000, Gift 500; total 1500; names display correctly | Tuấn + Khôi |
+| T14 | Expense by category for both years | Food 350, Transport 70; total 420; names display correctly | Tuấn + Khôi |
+| T15 | Open an empty app, then an app with saved records | Dashboard shows appropriate balances and menu in both cases | Khôi |
+| T16 | Complete add/edit/report operations | Successful actions return to Dashboard | Khôi |
 
-### T05 | F02 | Owner B
-- [ ] **Procedure / setup:** Create Category=Food, Wallet=Cash, expense 2025-12-31, amount 200.
-- [ ] **Expected:** Transaction has Expense kind, Category ID and Wallet ID, and displays Food/Cash.
-- [ ] **Implement in:** `test_transactions.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+## Recurring checks
 
-### T06 | F01-F02 | Owner B
-- [ ] **Procedure / setup:** Try unknown Wallet ID, unknown Category/Source ID, invalid date, amount 0 and negative amount.
-- [ ] **Expected:** Each is rejected; no extra transaction inserted or balance changed.
-- [ ] **Implement in:** `test_transactions.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+Pass a fixed Date to `generateCurrentMonth()` in the test; do not change the computer clock.
 
-### T07 | F15 | Owner A
-- [ ] **Procedure / setup:** Use fixed fixture in Section 2; open Dashboard after all five transactions.
-- [ ] **Expected:** Cash 750, Bank 480, overall balance 1230.
-- [ ] **Implement in:** `test_integration.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+| Check | What to try | Expected result | Owner |
+|---|---|---|---|
+| T17 | Create income/expense rules with start dates; one with end, one without | Correct fields; invalid amounts, dates, and references rejected | Khôi |
+| T18 | Start on 31 Jan; check 27/28 Feb and leap-year February | No early generation; due day is the last valid day where needed | Khôi |
+| T19 | Generate one due occurrence | One transaction with correct rule ID, year, and month | Khôi |
+| T20 | Generate, save/load, then generate again in the same month | No duplicate transaction | Khôi + Minh |
+| T21 | After one occurrence, check the next due month | One new occurrence; existing records stay unchanged | Khôi |
+| T22 | Check before start, after end, exactly on end, and after skipped months | Respect dates; only the current month is generated when due | Khôi |
 
-### T08 | F08 | Owner C
-- [ ] **Procedure / setup:** Date range 2026-01-01 through 2026-01-02 inclusive, use Section 2 fixture.
-- [ ] **Expected:** Income 500, expense 220, net 280.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+These expectations use our current month-end/no-backfill choices in [Team Choices](DECISIONS.md).
 
-### T09 | F08 | Owner C
-- [ ] **Procedure / setup:** Range 2025-12-31 to 2025-12-31; then reversed endpoints 2026-01-02 to 2026-01-01.
-- [ ] **Expected:** Single day income 1000, expense 200, net 800; reversed range rejected.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+## Storage, code, and submission checks
 
-### T10 | F09 | Owner C
-- [ ] **Procedure / setup:** Group Section 2 fixture by wallets over range 2025-12-31 to 2026-01-02.
-- [ ] **Expected:** Cash income 1000 expense 350; Bank income 500 expense 70; totals income 1500 expense 420.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+| Check | What to try | Expected result | Owner |
+|---|---|---|---|
+| T23 | Save/load all five record lists and all five counters | Every field matches, including text with spaces and recurring fields | Minh |
+| T24 | Exit and restart after saving wallet, transaction, and rule | Automatic load preserves records and balances | Minh + Khôi |
+| T25 | Start without a save file in an isolated test folder | Empty state, not a corruption error | Minh + Khôi |
+| T26 | Use bad magic/version, truncated data, excessive counts/string lengths | Reject bad file without crash or overwrite; caller state unchanged | Minh |
+| T27 | Make writing fail, then check the old good file | Save returns false, CLI reports failure, good file is preserved | Minh + Khôi |
+| T28 | Grow arrays, erase first/middle/last, copy, destroy, and reuse | Correct items; no shared ownership, double deletion, or lost allocations | Minh |
+| T29 | Read source/headers and build with warnings | Manual dynamic arrays; no forbidden STL containers | Everyone |
+| T30 | Enter letters, blank input, invalid menu choices, and bad dates | No crash or endless loop; next prompt works | Khôi |
+| T31 | Inspect real GitHub contributions | Each member has code commits from their own account | Everyone |
+| T32 | Extract final ZIP elsewhere, build it, open report/work division/video links | Package is complete and works; no personal save file included | Khôi + Minh |
 
-### T11 | F10 | Owner C
-- [ ] **Procedure / setup:** Choose both years 2025 and 2026.
-- [ ] **Expected:** 2025: 1000 / 200 / 800; 2026: 500 / 220 / 280; selected totals 1500 / 420 / 1080.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+T28 needs code review as well as functional tests; a passing normal run alone cannot prove there are no memory leaks. Storage should also check invalid record values, repeated IDs, missing references, and incorrect counters; those follow-up cases belong to Minh's current work.
 
-### T12 | F10 | Owner C
-- [ ] **Procedure / setup:** Select the year list [2025, 2026, 2026], then choose a year without records.
-- [ ] **Expected:** Repeated 2026 does not double count; empty year returns zero totals.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+## Save the actual result
 
-### T13 | F11 | Owner C
-- [ ] **Procedure / setup:** Select 2025+2026 for annual income by Source.
-- [ ] **Expected:** Salary 1000, Gift 500, total income 1500; Source IDs resolved to names.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+Use this short format in a weekly report or test note:
 
-### T14 | F12 | Owner C
-- [ ] **Procedure / setup:** Select 2025+2026 for annual expense by Category.
-- [ ] **Expected:** Food 350, Transport 70, total expense 420; Category IDs resolved to names.
-- [ ] **Implement in:** `test_statistics.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
+```text
+Check: T08
+Commit: real code revision
+Input: shared example, 2026-01-01 to 2026-01-02
+Expected: income 500, expenses 220, net 280
+Actual: fill after running
+Result: PASS / FAIL / NOT RUN
+Checked by: name
+```
 
-### T15 | F15 | Owner A
-- [ ] **Procedure / setup:** Start program with no save data, then after fixture is added.
-- [ ] **Expected:** Empty Dashboard displays zero appropriately; populated Dashboard lists every wallet plus navigation.
-- [ ] **Implement in:** `test_integration.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T16 | F16 | Owner A
-- [ ] **Procedure / setup:** Complete add Wallet, add Income, run Statistics, edit Category.
-- [ ] **Expected:** Each successful action automatically returns to main Dashboard.
-- [ ] **Implement in:** `test_integration.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T17 | F03 | Owner A
-- [ ] **Procedure / setup:** Create one income recurring rule starting 2026-01-10 with no end; create one expense rule ending 2026-03-10.
-- [ ] **Expected:** Both rule types store required start, optional end, correct Wallet and reference IDs.
-- [ ] **Implement in:** `test_recurring.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T18 | F03-F04 | Owner A
-- [ ] **Procedure / setup:** Rule with day 31, start 2026-01-31, simulate 2026-02-28, then a day before its due date.
-- [ ] **Expected:** Approved month-end clamp generates on Feb 28, not before due date; end-date rule respects inclusive end.
-- [ ] **Implement in:** `test_recurring.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T19 | F04 | Owner A
-- [ ] **Procedure / setup:** Set valid rule due today and simulate startup once.
-- [ ] **Expected:** Exactly one generated income/expense Transaction added; rule ID and cycle markers set.
-- [ ] **Implement in:** `test_recurring.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T20 | F04,F13-F14 | Owner A
-- [ ] **Procedure / setup:** Run due-check twice in same month, save/load between checks.
-- [ ] **Expected:** Only one Transaction exists for same (rule ID, year, month), including after restart.
-- [ ] **Implement in:** `test_recurring.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T21 | F04 | Owner A
-- [ ] **Procedure / setup:** After one generated January transaction, simulate startup in next due month.
-- [ ] **Expected:** Exactly one new Transaction for the next month; previous month stays unchanged.
-- [ ] **Implement in:** `test_recurring.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T22 | F04 | Owner A
-- [ ] **Procedure / setup:** Simulate startup before start date; after end date; and after skipping several months.
-- [ ] **Expected:** No invalid occurrence; only current month generated if due under approved no-backfill choice.
-- [ ] **Implement in:** `test_recurring.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T23 | F13 | Owner D
-- [ ] **Procedure / setup:** Write then reload all five collection types plus five next-ID counters.
-- [ ] **Expected:** Every record and string value, including spaces, matches; no pointer data serialized.
-- [ ] **Implement in:** `test_storage.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T24 | F14 | Owner D
-- [ ] **Procedure / setup:** Create wallet+transaction+rule, save, exit, restart and open Dashboard.
-- [ ] **Expected:** State loads automatically; values and relevant monthly dedup markers preserved.
-- [ ] **Implement in:** `test_storage.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T25 | F14 | Owner D
-- [ ] **Procedure / setup:** Delete/rename only an intentionally isolated test file, start program without finance.dat.
-- [ ] **Expected:** Program starts with clean empty state and does not claim corruption.
-- [ ] **Implement in:** `test_storage.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T26 | F13-F14 | Owner D
-- [ ] **Procedure / setup:** Try invalid magic, unknown version, truncated data, impossible count and huge string length.
-- [ ] **Expected:** LoadStatus=InvalidFile; process does not crash or overwrite corrupted original.
-- [ ] **Implement in:** `test_storage.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T27 | F13 | Owner D
-- [ ] **Procedure / setup:** Simulate inability to open/write save destination (permissions or controlled injection).
-- [ ] **Expected:** Save returns false and UI warns; prior good file is not reported as successfully replaced.
-- [ ] **Implement in:** `test_storage.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T28 | TC dynamic arrays | Owner D
-- [ ] **Procedure / setup:** Append enough records to grow twice; erase first/middle/last; copy AppState or array per agreed policy.
-- [ ] **Expected:** No out-of-range access, leak, use-after-free or shallow-copy double-delete.
-- [ ] **Implement in:** `test_dynamic_array.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T29 | TC no STL containers | Owner A/D
-- [ ] **Procedure / setup:** Inspect `include/` and `src/`; compile with warnings.
-- [ ] **Expected:** No forbidden STL collection objects or accidental std::vector/list/map; code uses manual dynamic arrays.
-- [ ] **Implement in:** `test_integration.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T30 | TC CLI | Owner A/B
-- [ ] **Procedure / setup:** Feed letters, excessive menu choice, empty line and malformed date at prompts.
-- [ ] **Expected:** No crash or infinite loop; error message and another prompt/dashboard appear.
-- [ ] **Implement in:** `test_integration.cpp` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T31 | Collaboration | Owner A
-- [ ] **Procedure / setup:** Review GitHub code history and actual changed C++ files for authors A/B/C/D.
-- [ ] **Expected:** Each member has at least one authentic source/test-code commit from their account; no document-only substitution.
-- [ ] **Implement in:** `manual review` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-### T32 | Submission | Owner A/D
-- [ ] **Procedure / setup:** Stage ZIP with src, include, Makefile, README, report, work division and YouTube links; unpack elsewhere.
-- [ ] **Expected:** Clean build works; report and work division open; YouTube links accessible; no private finance.dat.
-- [ ] **Implement in:** `manual release inspection` (or manual inspection where stated).
-- **Actual result:** `________________________` | **Result:** `NOT RUN / PASS / FAIL` | **Commit:** `________` | **Reviewer:** `________`
-
-## 4. Release decision and defect severity
-
-- **P0:** data loss, program cannot launch, unsafe corruption overwrite. BLOCK release.
-- **P1:** incorrect money totals, recurring duplicates, missing mandatory feature. BLOCK release.
-- **P2:** recoverable invalid input or inconvenient navigation. Must document/mitigate.
-- **P3:** cosmetic formatting. Fix after mandatory behaviors.
-
-**G3 feature-freeze sign-off:** tests executed `___ / 32`; passed `___`; failed `___`; blocked `___`; P0 open `___`; P1 open `___`; A `____`, D `____`. **G4 final-release sign-off:** staged ZIP retested `YES/NO`.
-
-Compare every acceptance case to [REQUIREMENTS.md](REQUIREMENTS.md); do not substitute the output of a placeholder test file for this evidence.
+A failed test is useful information. Fix lost data, wrong amounts, duplicates, and missing required features before formatting changes. Do not mark a check passed because a related test file merely exists.
