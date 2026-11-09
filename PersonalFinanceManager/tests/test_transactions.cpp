@@ -179,6 +179,106 @@ int main() {
     }
     cout << "Test 15 PASSED\n";
 
-    cout << "ALL 15 TESTS PASSED\n";
+    // Test 16: Reject negative amount
+    int sizeBefore = state.transactions.size();
+    int idBefore = state.nextTransactionId;
+
+    if (addExpense(state, {2026, 11, 10}, -50000,
+                   walletId, categoryId, "Negative", id) ||
+        state.transactions.size() != sizeBefore ||
+        state.nextTransactionId != idBefore) {
+        cout << "Test 16 FAILED\n";
+        return 1;
+    }
+    cout << "Test 16 PASSED\n";
+
+    // Test 17: Reject invalid date
+    if (addIncome(state, {2026, 2, 30}, 100000,
+                  walletId, sourceId, "Invalid date", id) ||
+        state.transactions.size() != sizeBefore ||
+        state.nextTransactionId != idBefore) {
+        cout << "Test 17 FAILED\n";
+        return 1;
+    }
+    cout << "Test 17 PASSED\n";
+
+    // Test 18: Reject invalid transaction kind
+    Transaction invalidKind;
+    invalidKind.date = {2026, 11, 10};
+    invalidKind.kind = static_cast<TransactionKind>(99);
+    invalidKind.walletId = walletId;
+    invalidKind.referenceId = sourceId;
+    invalidKind.amount = 100000;
+
+    if (addTransaction(state, invalidKind, id)) {
+        cout << "Test 18 FAILED\n";
+        return 1;
+    }
+    cout << "Test 18 PASSED\n";
+
+    // Test 19: Reject missing wallet
+    if (addExpense(state, {2026, 11, 10}, 50000,
+                   999, categoryId, "Unknown wallet", id)) {
+        cout << "Test 19 FAILED\n";
+        return 1;
+    }
+    cout << "Test 19 PASSED\n";
+
+    // Test 20: Reject mismatched reference ID
+    // Income uses IncomeSource, not ExpenseCategory.
+    Transaction wrongReference;
+    wrongReference.date = {2026, 11, 10};
+    wrongReference.kind = TransactionKind::Income;
+    wrongReference.walletId = walletId;
+    wrongReference.referenceId = 999;
+    wrongReference.amount = 100000;
+
+    if (addTransaction(state, wrongReference, id)) {
+        cout << "Test 20 FAILED\n";
+        return 1;
+    }
+    cout << "Test 20 PASSED\n";
+
+    // Test 21: Reject invalid recurring rule ID
+    Transaction recurring;
+    recurring.date = {2026, 11, 10};
+    recurring.kind = TransactionKind::Income;
+    recurring.walletId = walletId;
+    recurring.referenceId = sourceId;
+    recurring.amount = 100000;
+    recurring.recurringRuleId = 999;
+    recurring.occurrenceYear = 2026;
+    recurring.occurrenceMonth = 11;
+
+    if (addTransaction(state, recurring, id)) {
+        cout << "Test 21 FAILED\n";
+        return 1;
+    }
+    cout << "Test 21 PASSED\n";
+
+    // Test 22: Reject occurrence data for manual transaction
+    Transaction manual;
+    manual.date = {2026, 11, 10};
+    manual.kind = TransactionKind::Income;
+    manual.walletId = walletId;
+    manual.referenceId = sourceId;
+    manual.amount = 100000;
+    manual.occurrenceMonth = 11;
+
+    if (addTransaction(state, manual, id)) {
+        cout << "Test 22 FAILED\n";
+        return 1;
+    }
+    cout << "Test 22 PASSED\n";
+
+    // Test 23: Failed operations must not change state
+    if (state.transactions.size() != sizeBefore ||
+        state.nextTransactionId != idBefore) {
+        cout << "Test 23 FAILED\n";
+        return 1;
+    }
+    cout << "Test 23 PASSED\n";
+
+    cout << "ALL 23  TESTS PASSED\n";
     return 0;
 }
