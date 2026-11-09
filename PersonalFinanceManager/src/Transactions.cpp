@@ -95,3 +95,43 @@ const Transaction* findTransaction(const AppState& state, int id) {
     }
     return nullptr;
 }
+
+bool addIncome(AppState& state,
+               const Date& date,
+               std::int64_t amount,
+               int walletId,
+               int sourceId,
+               const std::string& description,
+               int& outId) {
+
+    Transaction t;
+
+    t.date = date;
+    t.kind = TransactionKind::Income;
+    t.referenceId = sourceId;
+    t.walletId = walletId;
+    t.amount = amount;
+    t.description = description;
+
+    return addTransaction(state, t, outId);
+}
+
+bool addExpense(AppState& state,
+                const Date& date,
+                std::int64_t amount,
+                int walletId,
+                int categoryId,
+                const std::string& description,
+                int& outId) {
+
+    Transaction t;
+
+    t.date = date;
+    t.kind = TransactionKind::Expense;
+    t.referenceId = categoryId;
+    t.walletId = walletId;
+    t.amount = amount;
+    t.description = description;
+
+    return addTransaction(state, t, outId);
+}

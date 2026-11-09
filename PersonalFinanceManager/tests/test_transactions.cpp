@@ -85,7 +85,6 @@ int main() {
         return 1;
     }
     cout << "Test 6 PASSED\n";
-
     
     // Test 7: Find existing income transaction
     const Transaction* found = findTransaction(state, 1);
@@ -113,6 +112,73 @@ int main() {
     }
     cout << "Test 9 PASSED\n";
 
-    cout << "ALL 9 TESTS PASSED\n";
+    // Test 10: Add valid income
+    if (!addIncome(state, {2026, 11, 10}, 200000,
+                   walletId, sourceId, "Allowance", id) ||
+        id != 3 || state.transactions.size() != 3) {
+        cout << "Test 10 FAILED\n";
+        return 1;
+    }
+    cout << "Test 10 PASSED\n";
+
+    // Test 11: Add valid expense
+    if (!addExpense(state, {2026, 11, 10}, 30000,
+                    walletId, categoryId, "Lunch", id) ||
+        id != 4 || state.transactions.size() != 4) {
+        cout << "Test 11 FAILED\n";
+        return 1;
+    }
+    cout << "Test 11 PASSED\n";
+
+    // Test 12: Check income information
+    const Transaction* income = findTransaction(state, 3);
+
+    if (income == nullptr ||
+        income->kind != TransactionKind::Income ||
+        income->referenceId != sourceId ||
+        income->walletId != walletId ||
+        income->amount != 200000) {
+        cout << "Test 12 FAILED\n";
+        return 1;
+    }
+    cout << "Test 12 PASSED\n";
+
+    // Test 13: Check expense information
+    const Transaction* expense = findTransaction(state, 4);
+
+    if (expense == nullptr ||
+        expense->kind != TransactionKind::Expense ||
+        expense->referenceId != categoryId ||
+        expense->walletId != walletId ||
+        expense->amount != 30000) {
+        cout << "Test 13 FAILED\n";
+        return 1;
+    }
+    cout << "Test 13 PASSED\n";
+
+    // Test 14: Reject invalid income source
+    int oldSize = state.transactions.size();
+    int nextId = state.nextTransactionId;
+
+    if (addIncome(state, {2026, 11, 10}, 100000,
+                  walletId, 999, "Invalid source", id) ||
+        state.transactions.size() != oldSize ||
+        state.nextTransactionId != nextId) {
+        cout << "Test 14 FAILED\n";
+        return 1;
+    }
+    cout << "Test 14 PASSED\n";
+
+    // Test 15: Reject invalid expense category
+    if (addExpense(state, {2026, 11, 10}, 100000,
+                   walletId, 999, "Invalid category", id) ||
+        state.transactions.size() != oldSize ||
+        state.nextTransactionId != nextId) {
+        cout << "Test 15 FAILED\n";
+        return 1;
+    }
+    cout << "Test 15 PASSED\n";
+
+    cout << "ALL 15 TESTS PASSED\n";
     return 0;
 }
