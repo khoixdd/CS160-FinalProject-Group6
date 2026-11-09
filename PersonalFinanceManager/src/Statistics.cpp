@@ -1,13 +1,12 @@
 #include "Statistics.h"
-// Trả về true nếu a sớm hơn hoặc bằng b (so sánh theo năm, tháng, ngày).
+
+// Returns true if a is earlier than or equal to b (year, then month, then day).
 static bool isDateLessOrEqual(const Date& a, const Date& b) {
     if (a.year != b.year) return a.year < b.year;
     if (a.month != b.month) return a.month < b.month;
     return a.day <= b.day;
 }
 
-// Tổng thu, chi, ròng trong khoảng [from, to] (tính cả hai đầu mút).
-// Trả về false nếu from > to (khoảng ngày bị đảo ngược).
 bool summarizeRange(const AppState& state, const Date& from,
                     const Date& to, MoneySummary& out) {
     out = MoneySummary();
@@ -28,5 +27,8 @@ bool summarizeRange(const AppState& state, const Date& from,
     out.net = out.income - out.expense;
     return true;
 }
-// INCOMPLETE SCAFFOLD. Implement the assigned public functions and tests.
-// See ../MANAGEMENT/WEEKLY_PLAN.md in the local team workspace.
+
+// TODO W2-C-02: summarizeByWallet
+// TODO W2-C-03: summarizeYears
+// TODO W3-C-01: incomeBySource
+// TODO W3-C-02: expenseByCategory
