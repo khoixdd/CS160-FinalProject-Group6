@@ -307,7 +307,6 @@ int main() {
         return 1;
     }
     cout << "Test 24 PASSED\n";
-
     
     // Test 25 (T04): Rename source without changing transaction
     if (!editIncomeSource(checkState, salaryId, "Employment Income")) {
