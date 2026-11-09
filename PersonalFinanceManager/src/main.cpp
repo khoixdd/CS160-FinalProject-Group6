@@ -2,12 +2,15 @@
 #include "InputUtils.h"
 #include "MasterData.h"
 #include "Statistics.h"
+#include "Storage.h"
 #include "Transactions.h"
 
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+
+const char* DATA_PATH = "data/finance.bin";
 
 bool readLine(const std::string& prompt, std::string& out) {
     std::cout << prompt;
@@ -261,33 +264,54 @@ void rangeScreen(const AppState& state) {
               << " VND\nNet: " << summary.net << " VND\n";
 }
 
+bool saveData(const AppState& state) {
+    if (!saveState(state, DATA_PATH)) {
+        std::cerr << "Save failed. Changes are only in memory. Check the data directory and retry.\n";
+        return false;
+    }
+    std::cout << "Data saved.\n";
+    return true;
+}
+
 int main() {
     AppState state;
-    std::cout << "Data is currently kept in memory only. Changes are lost on exit.\n";
+    const LoadStatus status = loadState(state, DATA_PATH);
+    if (status == LoadStatus::InvalidFile || status == LoadStatus::IOError) {
+        std::cerr << "Cannot load data/finance.bin. The file will not be overwritten. "
+                     "Restore a valid backup or move the file before starting again.\n";
+        return 1;
+    }
     while (true) {
         showDashboard(state);
         std::cout << "\n1. Manage wallets, sources, and categories\n"
                      "2. Date-range summary\n3. Add income or expense\n"
                      "5. List transactions\n7. List master data\n"
-                     "0. Exit\n";
+                     "8. Retry save\n0. Save and exit\n";
         int choice = -1;
         if (!readInteger("Choose: ", choice)) {
             if (!std::cin) {
+                if (!saveData(state)) {
+                    return 1;
+                }
                 return 0;
             }
             continue;
         }
+        bool changed = false;
         switch (choice) {
             case 0:
+                if (!saveData(state)) {
+                    return 1;
+                }
                 return 0;
             case 1:
-                masterScreen(state);
+                changed = masterScreen(state);
                 break;
             case 2:
                 rangeScreen(state);
                 break;
             case 3:
-                transactionScreen(state);
+                changed = transactionScreen(state);
                 break;
             case 5:
                 listTransactionsScreen(state);
@@ -295,9 +319,15 @@ int main() {
             case 7:
                 listMasterData(state);
                 break;
+            case 8:
+                saveData(state);
+                break;
             default:
                 std::cout << "Unknown option.\n";
                 break;
+        }
+        if (changed) {
+            saveData(state);
         }
     }
 }

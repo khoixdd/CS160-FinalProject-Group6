@@ -223,7 +223,7 @@ bool writeUInt32At (const std::filesystem::path& path, std::streamoff offset, st
 
 // T23 and T24
 void testRoundTrip () {
-    std::filesystem::path path = testDir() / "round_trip" / "finance.dat";
+    std::filesystem::path path = testDir() / "round_trip" / "finance.bin";
 
     AppState original;
     fillState(original);
@@ -248,7 +248,7 @@ void testRoundTrip () {
 
 // T23 edge case
 void testEmptyState () {
-    std::filesystem::path path = testDir() / "empty.dat";
+    std::filesystem::path path = testDir() / "empty.bin";
 
     AppState original;
     AppState loaded;
@@ -265,14 +265,14 @@ void testEmptyState () {
 void testMissingFile () {
     AppState state;
 
-    LoadStatus status = loadState(state, (testDir() / "missing.dat").string());
+    LoadStatus status = loadState(state, (testDir() / "missing.bin").string());
     assert(status == LoadStatus::NotFound);
 }
 
 // T26 truncated data
 void testTruncatedFile () {
-    std::filesystem::path good = testDir() / "good.dat";
-    std::filesystem::path bad = testDir() / "truncated.dat";
+    std::filesystem::path good = testDir() / "good.bin";
+    std::filesystem::path bad = testDir() / "truncated.bin";
 
     saveSample(good);
     bool ok = copyFile(good, bad);
@@ -297,9 +297,9 @@ void testTruncatedFile () {
 
 // T26 invalid magic 
 void testBadMagicAndVersion () {
-    std::filesystem::path good = testDir() / "valid_for_header_tests.dat";
-    std::filesystem::path badMagic = testDir() / "bad_magic.dat";
-    std::filesystem::path badVersion = testDir() / "bad_version.dat";
+    std::filesystem::path good = testDir() / "valid_for_header_tests.bin";
+    std::filesystem::path badMagic = testDir() / "bad_magic.bin";
+    std::filesystem::path badVersion = testDir() / "bad_version.bin";
 
     saveSample(good);
 
@@ -325,7 +325,7 @@ void testBadMagicAndVersion () {
 // T23 file layout: the _MIN_BYTES const must equal the real 
 // size of a record has empty strings
 void testMinimumRecordSizes () {
-    std::filesystem::path path = testDir() / "minimum_sizes.dat";
+    std::filesystem::path path = testDir() / "minimum_sizes.bin";
 
     AppState state;
 
@@ -383,7 +383,7 @@ void testMinimumRecordSizes () {
 
 // T26: string length above the limit
 void testBadStringLength () {
-    std::filesystem::path path = testDir() / "bad_string_length.dat";
+    std::filesystem::path path = testDir() / "bad_string_length.bin";
 
     saveSample(path);
 
@@ -399,7 +399,7 @@ void testBadStringLength () {
 
 // T27: save fails (string too long)
 void testOversizedStringNotSaved () {
-    std::filesystem::path path = testDir() / "preserve_good_file.dat";
+    std::filesystem::path path = testDir() / "preserve_good_file.bin";
 
     AppState valid;
     fillState(valid);
@@ -425,7 +425,7 @@ void testOversizedStringNotSaved () {
 
 // T23, T24: a second save replaces the first, and a reload returns the newest data
 void testOverwriteExistingFile () {
-    std::filesystem::path path = testDir() / "overwrite.dat";
+    std::filesystem::path path = testDir() / "overwrite.bin";
 
     AppState first;
     fillState(first);
@@ -454,7 +454,7 @@ void testUnwritableDestination () {
 
     AppState state;
     fillState(state);
-    bool ok = saveState(state, (blocker / "finance.dat").string());
+    bool ok = saveState(state, (blocker / "finance.bin").string());
     assert(!ok);
     assert(std::filesystem::is_regular_file(blocker));
 }
