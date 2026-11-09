@@ -24,6 +24,7 @@ public:
     T& at(int index);
     const T& at(int index) const;
 
+    void swap(DynamicArray& other) noexcept;
 private:
     T* data_ = nullptr;
     int size_ = 0;
@@ -67,6 +68,19 @@ DynamicArray<T>& DynamicArray<T>::operator=(const DynamicArray& other) {
 
     }
     return *this;
+}
+
+template <typename T>
+void DynamicArray<T>::swap(DynamicArray& other) noexcept {
+    std::swap(data_, other.data_);
+    std::swap(size_, other.size_);
+    std::swap(capacity_, other.capacity_);
+}
+ 
+// Found by argument-dependent lookup, so `using std::swap; swap(a, b);` is O(1) too.
+template <typename T>
+void swap(DynamicArray<T>& a, DynamicArray<T>& b) noexcept {
+    a.swap(b);
 }
 
 template <typename T>
