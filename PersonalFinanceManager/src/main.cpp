@@ -1,10 +1,12 @@
 #include "Dashboard.h"
 #include "InputUtils.h"
 #include "MasterData.h"
+#include "Recurring.h"
 #include "Statistics.h"
 #include "Storage.h"
 #include "Transactions.h"
 
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -250,6 +252,63 @@ bool transactionScreen(AppState& state) {
     return ok;
 }
 
+bool recurringScreen(AppState& state) {
+    Transaction t;
+    if (!readTransactionFields(state, t)) {
+        return false;
+    }
+    RecurringRule rule;
+    rule.kind = t.kind;
+    rule.walletId = t.walletId;
+    rule.referenceId = t.referenceId;
+    rule.amount = t.amount;
+    rule.description = t.description;
+    std::string end;
+    if (!readDate("Start date (YYYY-MM-DD): ", rule.startDate) ||
+        !readLine("End date (YYYY-MM-DD, blank for no end): ", end)) {
+        return false;
+    }
+    rule.hasEndDate = !end.empty();
+    if (rule.hasEndDate && !parseDate(end, rule.endDate)) {
+        std::cout << "Invalid end date.\n";
+        return false;
+    }
+    int id = 0;
+    const bool ok = addRecurringRule(state, rule, id);
+    if (ok) {
+        std::cout << "Monthly rule added. Due entries are checked at startup.\n";
+    } else {
+        std::cout << "Rule rejected. Check dates, amount, and IDs.\n";
+    }
+    return ok;
+}
+
+void listRulesScreen(const AppState& state) {
+    if (state.recurringRules.size() == 0) {
+        std::cout << "No recurring rules.\n";
+    }
+    for (int i = 0; i < state.recurringRules.size(); ++i) {
+        const RecurringRule& r = state.recurringRules.at(i);
+        std::cout << '[' << r.id << "] Monthly ";
+        if (r.kind == TransactionKind::Income) {
+            std::cout << "income ";
+        } else {
+            std::cout << "expense ";
+        }
+        std::cout << r.amount << " VND";
+        printReferences(state, r.kind, r.walletId, r.referenceId);
+        std::cout << " | Start: ";
+        printDate(r.startDate);
+        std::cout << " | End: ";
+        if (r.hasEndDate) {
+            printDate(r.endDate);
+        } else {
+            std::cout << "none";
+        }
+        std::cout << " | " << r.description << '\n';
+    }
+}
+
 void rangeScreen(const AppState& state) {
     Date from, to;
     if (!readDate("From (YYYY-MM-DD): ", from) || !readDate("To (YYYY-MM-DD): ", to)) {
@@ -281,12 +340,34 @@ int main() {
                      "Restore a valid backup or move the file before starting again.\n";
         return 1;
     }
+    // Use the computer clock so startup does not ask the user for today's date.
+    const std::time_t now = std::time(nullptr);
+    const std::tm* local = std::localtime(&now);
+    if (!local) {
+        std::cerr << "Cannot determine the current date.\n";
+        return 1;
+    }
+    Date today;
+    // tm_year counts from 1900; tm_mon uses 0 for January.
+    today.year = local->tm_year + 1900;
+    today.month = local->tm_mon + 1;
+    today.day = local->tm_mday;
+    int created = 0;
+    // Stop before saving if generation fails, leaving the old file unchanged.
+    if (!generateCurrentMonth(state, today, created)) {
+        std::cerr << "Recurring generation failed. Saved data was not changed.\n";
+        return 1;
+    }
+    if (created > 0) {
+        std::cout << "Generated " << created << " recurring transaction(s).\n";
+        saveData(state);
+    }
     while (true) {
         showDashboard(state);
         std::cout << "\n1. Manage wallets, sources, and categories\n"
                      "2. Date-range summary\n3. Add income or expense\n"
-                     "5. List transactions\n7. List master data\n"
-                     "8. Retry save\n0. Save and exit\n";
+                     "4. Add monthly recurring rule\n5. List transactions\n"
+                     "6. List recurring rules\n7. List master data\n8. Retry save\n0. Save and exit\n";
         int choice = -1;
         if (!readInteger("Choose: ", choice)) {
             if (!std::cin) {
@@ -313,8 +394,14 @@ int main() {
             case 3:
                 changed = transactionScreen(state);
                 break;
+            case 4:
+                changed = recurringScreen(state);
+                break;
             case 5:
                 listTransactionsScreen(state);
+                break;
+            case 6:
+                listRulesScreen(state);
                 break;
             case 7:
                 listMasterData(state);
