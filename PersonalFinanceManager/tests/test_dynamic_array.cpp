@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <string>
+#include <utility>
 #include "../include/DynamicArray.h"
 
 void fillArray (int n, DynamicArray<int> &arr) {
@@ -312,6 +313,105 @@ void testPushBackSelf () {
     assert(arr.size() == 5 && arr.at(4) == 1);
 }
 
+void testMemberSwap() {
+    DynamicArray<int> a, b;
+
+    // a = {10, 20, 30}
+    assert(a.pushBack(10));
+    assert(a.pushBack(20));
+    assert(a.pushBack(30));
+
+    // b = {7, 8}
+    assert(b.pushBack(7));
+    assert(b.pushBack(8));
+
+    // Save the original information.
+    int aSize = a.size();
+    int bSize = b.size();
+
+    int aCapacity = a.capacity();
+    int bCapacity = b.capacity();
+
+    const int* aFirst = &a.at(0);
+    const int* bFirst = &b.at(0);
+
+    // Member function swap.
+    a.swap(b);
+
+    // Check sizes and capacities.
+    assert(a.size() == bSize);
+    assert(b.size() == aSize);
+
+    assert(a.capacity() == bCapacity);
+    assert(b.capacity() == aCapacity);
+
+    // Check elements.
+    assert(a.at(0) == 7);
+    assert(a.at(1) == 8);
+
+    assert(b.at(0) == 10);
+    assert(b.at(1) == 20);
+    assert(b.at(2) == 30);
+
+    // Check that memory ownership was swapped, not copied.
+    assert(&a.at(0) == bFirst);
+    assert(&b.at(0) == aFirst);
+
+    // Test self-swap.
+    const int* oldFirst = &a.at(0);
+    int oldSize = a.size();
+    int oldCapacity = a.capacity();
+
+    a.swap(a);
+
+    assert(a.size() == oldSize);
+    assert(a.capacity() == oldCapacity);
+    assert(&a.at(0) == oldFirst);
+    assert(a.at(0) == 7);
+    assert(a.at(1) == 8);
+}
+
+void testSwapUsingADL() { // Test dynamic array swapping via Argument-Dependent Lookup
+    DynamicArray<std::string> a, b;
+
+    assert(a.pushBack("wallet"));
+    assert(a.pushBack("expense"));
+
+    assert(b.pushBack("income"));
+
+    const std::string* aFirst = &a.at(0);
+    const std::string* bFirst = &b.at(0);
+
+    int aSize = a.size();
+    int bSize = b.size();
+
+    int aCapacity = a.capacity();
+    int bCapacity = b.capacity();
+
+    // Use ADL to find the custom swap function.
+    using std::swap;
+    swap(a, b);
+
+    // Check sizes and capacities.
+    assert(a.size() == bSize);
+    assert(b.size() == aSize);
+
+    assert(a.capacity() == bCapacity);
+    assert(b.capacity() == aCapacity);
+
+    // Check elements.
+    assert(a.size() == 1);
+    assert(a.at(0) == "income");
+
+    assert(b.size() == 2);
+    assert(b.at(0) == "wallet");
+    assert(b.at(1) == "expense");
+
+    // Check that memory ownership was swapped, not copied.
+    assert(&a.at(0) == bFirst);
+    assert(&b.at(0) == aFirst);
+}
+
 int main() {
     std::cout << "Starting test dynamic array\n\n";
 
@@ -368,6 +468,12 @@ int main() {
 
     testAssignIsDeepCopy();
     std::cout << "Assign deep copy Test PASSED\n";
+
+    testMemberSwap();
+    std::cout << "Member swap Test PASSED\n";
+
+    testSwapUsingADL();
+    std::cout << "ADL swap Test PASSED\n";
 
     std::cout << "\n\n";
     std::cout << "All tests passed\n";
