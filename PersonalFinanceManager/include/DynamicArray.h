@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <utility>
 // Owner D - W1-D-03 / W2-D-01.
-// INCOMPLETE SCAFFOLD: implement ALL special members and methods before use.
+// ALL special members and methods are implemented and are ready to be used.
 // Store T items in manually allocated new T[] / delete[] memory.
 // Do not use STL collection containers.
 template <typename T>
@@ -24,6 +24,7 @@ public:
     T& at(int index);
     const T& at(int index) const;
 
+    void swap(DynamicArray& other) noexcept;
 private:
     T* data_ = nullptr;
     int size_ = 0;
@@ -67,6 +68,19 @@ DynamicArray<T>& DynamicArray<T>::operator=(const DynamicArray& other) {
 
     }
     return *this;
+}
+
+template <typename T>
+void DynamicArray<T>::swap(DynamicArray& other) noexcept {
+    std::swap(data_, other.data_);
+    std::swap(size_, other.size_);
+    std::swap(capacity_, other.capacity_);
+}
+ 
+// Found by argument-dependent lookup, so `using std::swap; swap(a, b);` is O(1) too.
+template <typename T>
+void swap(DynamicArray<T>& a, DynamicArray<T>& b) noexcept {
+    a.swap(b);
 }
 
 template <typename T>

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <string>
+#include <utility>
 #include "../include/DynamicArray.h"
 
 void fillArray (int n, DynamicArray<int> &arr) {
@@ -312,6 +313,196 @@ void testPushBackSelf () {
     assert(arr.size() == 5 && arr.at(4) == 1);
 }
 
+// Counts the objects that alive, so a leak or a double delete shows up
+struct Tracked {
+    static int alive;
+
+    Tracked () { ++alive; }
+    Tracked (const Tracked&) { ++alive; }
+    Tracked& operator=(const Tracked&) { return *this; }
+    ~Tracked () { --alive; }
+};
+
+int Tracked::alive = 0;
+
+void testEraseToEmptyAndReuse () {
+    DynamicArray<int> arr;
+
+    assert(arr.pushBack(42));
+    assert(arr.size() == 1);
+    assert(arr.at(0) == 42);
+
+    assert(arr.eraseAt(0));
+    assert(arr.size() == 0);
+    assert(arr.eraseAt(0) == false);
+
+    fillArray(10, arr);
+    assert(arr.size() == 10);
+    for (int i = 0; i < arr.size(); ++i)
+        assert(arr.at(i) == i + 1);
+}
+
+void testEraseMiddleAfterGrow () {
+    DynamicArray<int> arr;
+    int n = 1000;
+
+    fillArray(n, arr);
+    assert(arr.size() == n);
+
+    assert(arr.eraseAt(n / 2));
+    assert(arr.size() == n - 1);
+
+    for (int i = 0; i < arr.size(); ++i) {
+        if (i < n / 2)
+            assert(arr.at(i) == i + 1);
+        else
+            assert(arr.at(i) == i + 2);
+    }
+}
+
+void testCopyStringArray () {
+    DynamicArray<std::string> arr;
+
+    assert(arr.pushBack("wallet"));
+    assert(arr.pushBack("category"));
+
+    DynamicArray<std::string> copy(arr);
+    DynamicArray<std::string> tmp;
+    tmp = arr;
+
+    copy.at(0) = "changed";
+    tmp.at(1) = "changed too";
+
+    assert(arr.at(0) == "wallet");
+    assert(arr.at(1) == "category");
+    assert(copy.at(1) == "category");
+    assert(tmp.at(0) == "wallet");
+}
+
+void testNoLeakNoDoubleDelete () {
+    assert(Tracked::alive == 0);
+
+    {
+        DynamicArray<Tracked> arr;
+        Tracked item;
+
+        for (int i = 0; i < 100; ++i)
+            arr.pushBack(item);
+
+        arr.eraseAt(0);
+        arr.eraseAt(arr.size() / 2);
+        arr.eraseAt(arr.size() - 1);
+
+        DynamicArray<Tracked> copy(arr);
+        DynamicArray<Tracked> tmp;
+        tmp = arr;
+        tmp = copy;
+        copy.swap(tmp);
+    }
+
+    // Every object created by new T[] should be deleted
+    assert(Tracked::alive == 0);
+}
+
+void testMemberSwap() {
+    DynamicArray<int> a, b;
+
+    // a = {10, 20, 30}
+    assert(a.pushBack(10));
+    assert(a.pushBack(20));
+    assert(a.pushBack(30));
+
+    // b = {7, 8}
+    assert(b.pushBack(7));
+    assert(b.pushBack(8));
+
+    // Save the original information.
+    int aSize = a.size();
+    int bSize = b.size();
+
+    int aCapacity = a.capacity();
+    int bCapacity = b.capacity();
+
+    const int* aFirst = &a.at(0);
+    const int* bFirst = &b.at(0);
+
+    // Member function swap.
+    a.swap(b);
+
+    // Check sizes and capacities.
+    assert(a.size() == bSize);
+    assert(b.size() == aSize);
+
+    assert(a.capacity() == bCapacity);
+    assert(b.capacity() == aCapacity);
+
+    // Check elements.
+    assert(a.at(0) == 7);
+    assert(a.at(1) == 8);
+
+    assert(b.at(0) == 10);
+    assert(b.at(1) == 20);
+    assert(b.at(2) == 30);
+
+    // Check that memory ownership was swapped, not copied.
+    assert(&a.at(0) == bFirst);
+    assert(&b.at(0) == aFirst);
+
+    // Test self-swap.
+    const int* oldFirst = &a.at(0);
+    int oldSize = a.size();
+    int oldCapacity = a.capacity();
+
+    a.swap(a);
+
+    assert(a.size() == oldSize);
+    assert(a.capacity() == oldCapacity);
+    assert(&a.at(0) == oldFirst);
+    assert(a.at(0) == 7);
+    assert(a.at(1) == 8);
+}
+
+void testSwapUsingADL() { // Test dynamic array swapping via Argument-Dependent Lookup
+    DynamicArray<std::string> a, b;
+
+    assert(a.pushBack("wallet"));
+    assert(a.pushBack("expense"));
+
+    assert(b.pushBack("income"));
+
+    const std::string* aFirst = &a.at(0);
+    const std::string* bFirst = &b.at(0);
+
+    int aSize = a.size();
+    int bSize = b.size();
+
+    int aCapacity = a.capacity();
+    int bCapacity = b.capacity();
+
+    // Use ADL to find the custom swap function.
+    using std::swap;
+    swap(a, b);
+
+    // Check sizes and capacities.
+    assert(a.size() == bSize);
+    assert(b.size() == aSize);
+
+    assert(a.capacity() == bCapacity);
+    assert(b.capacity() == aCapacity);
+
+    // Check elements.
+    assert(a.size() == 1);
+    assert(a.at(0) == "income");
+
+    assert(b.size() == 2);
+    assert(b.at(0) == "wallet");
+    assert(b.at(1) == "expense");
+
+    // Check that memory ownership was swapped, not copied.
+    assert(&a.at(0) == bFirst);
+    assert(&b.at(0) == aFirst);
+}
+
 int main() {
     std::cout << "Starting test dynamic array\n\n";
 
@@ -369,8 +560,25 @@ int main() {
     testAssignIsDeepCopy();
     std::cout << "Assign deep copy Test PASSED\n";
 
+    testEraseToEmptyAndReuse();
+    std::cout << "Erase to empty and reuse Test PASSED\n";
+
+    testEraseMiddleAfterGrow();
+    std::cout << "Erase middle after grow Test PASSED\n";
+
+    testCopyStringArray();
+    std::cout << "Copy string array Test PASSED\n";
+
+    testNoLeakNoDoubleDelete();
+    std::cout << "No leak no double delete Test PASSED\n";
+
+    testMemberSwap();
+    std::cout << "Member swap Test PASSED\n";
+
+    testSwapUsingADL();
+    std::cout << "ADL swap Test PASSED\n";
+
     std::cout << "\n\n";
     std::cout << "All tests passed\n";
-    // std::cerr << "NOT IMPLEMENTED: test_dynamic_array.cpp - replace this stub with real assertions.\n";
     return 0;
 }
