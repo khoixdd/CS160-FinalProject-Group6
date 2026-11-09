@@ -86,6 +86,33 @@ int main() {
     }
     cout << "Test 6 PASSED\n";
 
-    cout << "ALL 6 TESTS PASSED\n";
+    
+    // Test 7: Find existing income transaction
+    const Transaction* found = findTransaction(state, 1);
+    if (found == nullptr || found->amount != 500000 ||
+        found->kind != TransactionKind::Income) {
+        cout << "Test 7 FAILED\n";
+        return 1;
+    }
+    cout << "Test 7 PASSED\n";
+
+    // Test 8: Find existing expense transaction
+    found = findTransaction(state, 2);
+    if (found == nullptr || found->amount != 50000 ||
+        found->kind != TransactionKind::Expense) {
+        cout << "Test 8 FAILED\n";
+        return 1;
+    }
+    cout << "Test 8 PASSED\n";
+
+    // Test 9: Find missing transaction
+    found = findTransaction(state, 999);
+    if (found != nullptr) {
+        cout << "Test 9 FAILED\n";
+        return 1;
+    }
+    cout << "Test 9 PASSED\n";
+
+    cout << "ALL 9 TESTS PASSED\n";
     return 0;
 }

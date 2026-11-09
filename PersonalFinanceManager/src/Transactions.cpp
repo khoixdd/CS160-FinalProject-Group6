@@ -86,3 +86,12 @@ bool addTransaction(AppState& state,
 
     return true;
 }
+
+const Transaction* findTransaction(const AppState& state, int id) {
+    for (int i = 0; i < state.transactions.size(); i++) {
+        if (state.transactions.at(i).id == id) {
+            return &state.transactions.at(i);
+        }
+    }
+    return nullptr;
+}
