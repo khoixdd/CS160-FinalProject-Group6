@@ -1,35 +1,34 @@
-# Team Decision Register (Local, Not on GitHub)
+# Team Choices
 
-The assignment leaves several implementation details open. The decisions below are **proposed defaults**, not claims about instructor rules. A must record explicit team agreement in Week 1; if the TA says otherwise, update [ARCHITECTURE.md](ARCHITECTURE.md), affected test cases and owner tasks **together**.
+The assignment does not specify every small detail. This page explains the choices used or proposed in our project. The earlier document marked agreement as Pending; no group approval is being invented here.
 
-| ID | Design question | Proposed baseline | Status / agreed by | Rationale / test |
-|---|---|---|---|---|
-| ADR-01 | Storage format and path | Binary v1 at `data/finance.dat` (created on first save). | **Pending A/B/C/D confirmation** | Meets Binary/XML requirement; `T23`–`T27`. |
-| ADR-02 | Money representation | `std::int64_t` units of VND, positive amount for each transaction, balances can be negative. | **Pending** | Avoid floating rounding; `T07`, `T09`. |
-| ADR-03 | Wallet opening balance | Extra `openingBalance`, default 0. | **Pending** | Enables initial wallet funds; not required by PDF. |
-| ADR-04 | Date representation | `Date{year,month,day}`, console `YYYY-MM-DD`, valid leap-year check. | **Pending** | Explicit comparison/validation; `T09`, `T18`. |
-| ADR-05 | Report range endpoints | Both dates inclusive; reject from>to. | **Pending** | `T08`, `T09`. |
-| ADR-06 | Multiple-year selection | Year list de-duplicated before aggregation. | **Pending** | Prevent overcount when user repeats a year; `T12`. |
-| ADR-07 | Monthly due date | Day = min(start day, current month's last day), generate only if due by today's date. | **Pending** | Clarifies 29th–31st; `T18`, `T21`. |
-| ADR-08 | Missing months | Do not backfill skipped months; evaluate current month only. | **Pending** | Matches narrow reading of PDF's “current month”; `T22`. |
-| ADR-09 | Duplicate prevention | Persist ruleId, occurrenceYear, occurrenceMonth in Transaction. | **Pending** | Restart-safe idempotency; `T19`, `T20`. |
-| ADR-10 | Delete referenced master data | Reject delete while used by transactions or recurring rules. | **Pending** | Preserves readable names; `T02`. |
-| ADR-11 | How to handle corrupt Binary | LoadStatus=InvalidFile; halt safely, never overwrite with empty state. | **Pending** | Protect against silent data loss; `T26`. |
-| ADR-12 | Save timing | Save on mutation and on exit; use temp file replacement if possible. | **Pending** | Reduce crash-related data loss; `T23`, `T27`. |
-| ADR-13 | Handling generated transactions | Treat as Transaction records with cycle metadata; define edit/delete rules before permitting them. | **Pending** | Avoid unintended duplicate re-creation. |
-| ADR-14 | Git repository boundaries | Git tracks code/tests/build only; all management Markdown and final report stay outside Git. | **Pending** | Complies with requested workflow; GitHub still documents real code authorship. |
+## Current choices and proposals
 
-**Decision approval record:** `Date: ________ | A: ________ | B: ________ | C: ________ | D: ________ | TA exception (if any): ________`
+The ADR numbers are kept only so older references still work.
 
-## Change request template
+| ID | Choice in simple terms | Code / discussion status |
+|---|---|---|
+| ADR-01 | Save Binary v1 to `data/finance.bin`. The file begins with `PFM1` and version 1. | Used in the current branch. `.bin` was requested by Khôi; group agreement was not recorded. |
+| ADR-02 | Store money as whole VND in a signed 64-bit integer. Transaction amounts are positive; a balance may be negative. | Used; group agreement not recorded. |
+| ADR-03 | A wallet may have an opening balance, default 0. | Used; this is extra to the required ID/name fields. Group agreement not recorded. |
+| ADR-04 | Store dates as year/month/day and enter them as `YYYY-MM-DD`. | Used; group agreement not recorded. |
+| ADR-05 | Include both ends of a report date range; reject reversed endpoints. | Used by the date-range summary; group agreement not recorded. |
+| ADR-06 | If a selected year is repeated, count each transaction only once. | Planned for the remaining reports. |
+| ADR-07 | A rule starting on day 31 uses the last valid day in shorter months. Generate only when that month's due date has arrived. Include a due date equal to the end date. | Used by recurring; group agreement not recorded. |
+| ADR-08 | Check the current month only; do not add all missed months. | Used by recurring; group agreement not recorded. |
+| ADR-09 | Save the rule ID, occurrence year, and occurrence month on a generated transaction. | Used to prevent duplicates after restart. |
+| ADR-10 | Do not delete a wallet/source/category while transactions or rules refer to it. | Used by Master Data; group agreement not recorded. |
+| ADR-11 | On a load error, stop without replacing the file with an empty state. | Used by CLI. More loaded-record validation is still needed in Storage. |
+| ADR-12 | Save after a successful change and on exit; write a temporary file before replacing the old save. | Used. Check file replacement on Windows. |
+| ADR-13 | Generated entries remain ordinary transaction records with their recurring fields. Defer edit/delete features until their effects are agreed. | Current scope; no new edit/delete behavior approved. |
+| ADR-14 | Keep one Git repository at `CS160-FinalProject-Group6/`. Code and management documents already live inside it. | Actual structure. The old proposal for a separate code-only repository is outdated. |
 
-- **Decision ID / Task ID:**
-- **Original behavior:**
-- **Requested behavior:**
-- **Why:**
-- **Affected models, headers, source files, storage version, and tests:**
-- **Approval by affected owners:**
-- **Effective date:**
-- **Migration needed for `data/finance.dat`?** Yes / No / Unknown
+For example, a rule starting on 31 January can generate on 28 February, but not on 27 February. If the user opens the app again that month, the saved rule/year/month fields prevent another copy.
 
-Do not change `Models.h` or Binary format in isolation: an apparently small data-model change can silently break every member's work and previously saved data.
+## Before changing a shared choice
+
+Tell the affected members what you want to change, why, and which files or saved data will be affected. A short message is enough. Agree on the behavior before changing the shared structs or file format.
+
+Example: changing a transaction field affects Hoàng Anh's creation function, Khôi's recurring code, Tuấn's reports, and Minh's binary read/write order.
+
+Record actual agreement here with the date and members who agreed. Do not fill in approval for someone else. The file extension change does not itself change the Binary v1 bytes; an old valid file can be backed up and renamed when needed.

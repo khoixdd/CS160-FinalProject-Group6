@@ -9,6 +9,7 @@
 
 # Runtime data
 **/data/*.dat
+**/data/*.bin
 
 # Editor files
 .vscode/

@@ -3,7 +3,7 @@
 #include "AppState.h"
 #include <string>
 #include <cstdint>
-// Owner D: Binary v1 at data/finance.dat; serialize individual fields.
+// Owner D: Binary v1 at data/finance.bin; serialize individual fields.
 namespace storage_v1 {
     const char MAGIC[4] = {'P', 'F', 'M', '1'};
     const std::uint32_t VERSION = 1;

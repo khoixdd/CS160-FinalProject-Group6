@@ -2,6 +2,7 @@
 /build/
 /data/
 *.dat
+*.bin
 *.tmp
 *.o
 *.exe
