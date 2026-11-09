@@ -313,6 +313,97 @@ void testPushBackSelf () {
     assert(arr.size() == 5 && arr.at(4) == 1);
 }
 
+// Counts the objects that alive, so a leak or a double delete shows up
+struct Tracked {
+    static int alive;
+
+    Tracked () { ++alive; }
+    Tracked (const Tracked&) { ++alive; }
+    Tracked& operator=(const Tracked&) { return *this; }
+    ~Tracked () { --alive; }
+};
+
+int Tracked::alive = 0;
+
+void testEraseToEmptyAndReuse () {
+    DynamicArray<int> arr;
+
+    assert(arr.pushBack(42));
+    assert(arr.size() == 1);
+    assert(arr.at(0) == 42);
+
+    assert(arr.eraseAt(0));
+    assert(arr.size() == 0);
+    assert(arr.eraseAt(0) == false);
+
+    fillArray(10, arr);
+    assert(arr.size() == 10);
+    for (int i = 0; i < arr.size(); ++i)
+        assert(arr.at(i) == i + 1);
+}
+
+void testEraseMiddleAfterGrow () {
+    DynamicArray<int> arr;
+    int n = 1000;
+
+    fillArray(n, arr);
+    assert(arr.size() == n);
+
+    assert(arr.eraseAt(n / 2));
+    assert(arr.size() == n - 1);
+
+    for (int i = 0; i < arr.size(); ++i) {
+        if (i < n / 2)
+            assert(arr.at(i) == i + 1);
+        else
+            assert(arr.at(i) == i + 2);
+    }
+}
+
+void testCopyStringArray () {
+    DynamicArray<std::string> arr;
+
+    assert(arr.pushBack("wallet"));
+    assert(arr.pushBack("category"));
+
+    DynamicArray<std::string> copy(arr);
+    DynamicArray<std::string> tmp;
+    tmp = arr;
+
+    copy.at(0) = "changed";
+    tmp.at(1) = "changed too";
+
+    assert(arr.at(0) == "wallet");
+    assert(arr.at(1) == "category");
+    assert(copy.at(1) == "category");
+    assert(tmp.at(0) == "wallet");
+}
+
+void testNoLeakNoDoubleDelete () {
+    assert(Tracked::alive == 0);
+
+    {
+        DynamicArray<Tracked> arr;
+        Tracked item;
+
+        for (int i = 0; i < 100; ++i)
+            arr.pushBack(item);
+
+        arr.eraseAt(0);
+        arr.eraseAt(arr.size() / 2);
+        arr.eraseAt(arr.size() - 1);
+
+        DynamicArray<Tracked> copy(arr);
+        DynamicArray<Tracked> tmp;
+        tmp = arr;
+        tmp = copy;
+        copy.swap(tmp);
+    }
+
+    // Every object created by new T[] should be deleted
+    assert(Tracked::alive == 0);
+}
+
 void testMemberSwap() {
     DynamicArray<int> a, b;
 
@@ -469,6 +560,18 @@ int main() {
     testAssignIsDeepCopy();
     std::cout << "Assign deep copy Test PASSED\n";
 
+    testEraseToEmptyAndReuse();
+    std::cout << "Erase to empty and reuse Test PASSED\n";
+
+    testEraseMiddleAfterGrow();
+    std::cout << "Erase middle after grow Test PASSED\n";
+
+    testCopyStringArray();
+    std::cout << "Copy string array Test PASSED\n";
+
+    testNoLeakNoDoubleDelete();
+    std::cout << "No leak no double delete Test PASSED\n";
+
     testMemberSwap();
     std::cout << "Member swap Test PASSED\n";
 
@@ -477,6 +580,5 @@ int main() {
 
     std::cout << "\n\n";
     std::cout << "All tests passed\n";
-    // std::cerr << "NOT IMPLEMENTED: test_dynamic_array.cpp - replace this stub with real assertions.\n";
     return 0;
 }

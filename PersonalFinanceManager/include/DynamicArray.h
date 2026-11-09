@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <utility>
 // Owner D - W1-D-03 / W2-D-01.
-// INCOMPLETE SCAFFOLD: implement ALL special members and methods before use.
+// ALL special members and methods are implemented and are ready to be used.
 // Store T items in manually allocated new T[] / delete[] memory.
 // Do not use STL collection containers.
 template <typename T>
