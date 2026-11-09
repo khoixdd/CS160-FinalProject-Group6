@@ -279,6 +279,103 @@ int main() {
     }
     cout << "Test 23 PASSED\n";
 
-    cout << "ALL 23  TESTS PASSED\n";
+    // Test 24 (T03): Income stores correct information
+    AppState checkState;
+    int cashId, salaryId, foodId, transactionId = -1;
+
+    addWallet(checkState, "Cash", 1000, cashId);
+    addIncomeSource(checkState, "Salary", salaryId);
+    addExpenseCategory(checkState, "Food", foodId);
+
+    bool added = addIncome(checkState, {2025, 12, 31},
+                           1000, cashId, salaryId,
+                           "Salary for December", transactionId);
+
+    const Transaction* saved =
+    added ? findTransaction(checkState, transactionId) : nullptr;
+
+    if (!added || saved == nullptr ||
+        saved->date.year != 2025 ||
+        saved->date.month != 12 ||
+        saved->date.day != 31 ||
+        saved->kind != TransactionKind::Income ||
+        saved->amount != 1000 ||
+        saved->walletId != cashId ||
+        saved->referenceId != salaryId ||
+        saved->description != "Salary for December") {
+        cout << "Test 24 FAILED\n";
+        return 1;
+    }
+    cout << "Test 24 PASSED\n";
+
+    
+    // Test 25 (T04): Rename source without changing transaction
+    if (!editIncomeSource(checkState, salaryId, "Employment Income")) {
+        cout << "Test 25 FAILED\n";
+        return 1;
+    }
+
+    saved = findTransaction(checkState, transactionId);
+
+    if (saved == nullptr) {
+        cout << "Test 25 FAILED\n";
+        return 1;
+    }
+
+    const IncomeSource* source =
+        findIncomeSource(checkState, saved->referenceId);
+
+    if (source == nullptr ||
+        source->name != "Employment Income" ||
+        saved->referenceId != salaryId ||
+        saved->amount != 1000) {
+        cout << "Test 25 FAILED\n";
+        return 1;
+    }
+
+    cout << "Test 25 PASSED\n";
+
+
+    // Test 26 (T05): Expense stores correct information
+    int expenseId = -1;
+
+    bool expenseAdded = addExpense(checkState, {2025, 12, 31},
+                                   200, cashId, foodId,
+                                   "Buy food", expenseId);
+
+    if (!expenseAdded) {
+        cout << "Test 26 FAILED\n";
+        return 1;
+    }
+
+    const Transaction* savedExpense =
+        findTransaction(checkState, expenseId);
+
+    if (savedExpense == nullptr) {
+        cout << "Test 26 FAILED\n";
+        return 1;
+    }
+
+    const ExpenseCategory* category =
+        findExpenseCategory(checkState, savedExpense->referenceId);
+
+    const Wallet* wallet =
+        findWallet(checkState, savedExpense->walletId);
+
+    if (savedExpense->kind != TransactionKind::Expense ||
+        savedExpense->amount != 200 ||
+        savedExpense->referenceId != foodId ||
+        savedExpense->walletId != cashId ||
+        category == nullptr ||
+        category->name != "Food" ||
+        wallet == nullptr ||
+        wallet->name != "Cash") {
+        cout << "Test 26 FAILED\n";
+        return 1;
+    }
+
+    cout << "Test 26 PASSED\n";
+
+    cout << "ALL 26 TESTS PASSED\n";
     return 0;
 }
