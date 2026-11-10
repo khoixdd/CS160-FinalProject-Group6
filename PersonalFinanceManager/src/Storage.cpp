@@ -295,6 +295,101 @@ bool readRecords(std::istream& in, std::uint32_t count, DynamicArray<T>& arr,
     return true;
 }
 
+// Adding checks run before saving and after loading.
+bool isValidDate(const Date& d) {
+    if (d.year < 1 || d.year > 9999 || d.month < 1 || d.month > 12)
+        return false;
+
+    bool leap = (d.year % 400 == 0) || (d.year % 4 == 0 && d.year % 100 != 0);
+    const int DAYS[] = {31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+    return d.day >= 1 && d.day <= DAYS[d.month - 1];
+}
+
+bool fitsString(const std::string& text) {
+    return text.size() <= MAX_STRING_BYTES;
+}
+
+template <typename T>
+bool tooManyRecords(const DynamicArray<T>& items) {
+    return items.size() > static_cast<int>(MAX_RECORDS_PER_TYPE);
+}
+
+// A new record cannot reuse an existing or deleted ID.
+template <typename T>
+bool hasValidUniqueIds(const DynamicArray<T>& items, int nextId) {
+    if (nextId < 1)
+        return false;
+
+    int n = items.size();
+    std::unique_ptr<int[]> ids(new int[n]);
+
+    for (int i = 0; i < n; ++i) {
+        int id = items.at(i).id;
+        if (id <= 0 || id >= nextId)
+            return false;
+        ids[i] = id;
+    }
+
+    std::sort(ids.get(), ids.get() + n);
+    for (int i = 1; i < n; ++i) {
+        if (ids[i] == ids[i - 1])
+            return false;
+    }
+
+    return true;
+}
+
+bool isStateConsistent(const AppState& state) {
+    if (tooManyRecords(state.wallets) || tooManyRecords(state.categories)
+        || tooManyRecords(state.incomeSources) || tooManyRecords(state.transactions)
+        || tooManyRecords(state.recurringRules)) {
+        return false;
+    }
+
+    if (!hasValidUniqueIds(state.wallets, state.nextWalletId)
+        || !hasValidUniqueIds(state.categories, state.nextCategoryId)
+        || !hasValidUniqueIds(state.incomeSources, state.nextSourceId)
+        || !hasValidUniqueIds(state.transactions, state.nextTransactionId)
+        || !hasValidUniqueIds(state.recurringRules, state.nextRecurringRuleId)) {
+        return false;
+    }
+
+    for (int i = 0; i < state.wallets.size(); ++i) {
+        if (!fitsString(state.wallets.at(i).name))
+            return false;
+    }
+
+    for (int i = 0; i < state.categories.size(); ++i) {
+        if (!fitsString(state.categories.at(i).name))
+            return false;
+    }
+
+    for (int i = 0; i < state.incomeSources.size(); ++i) {
+        if (!fitsString(state.incomeSources.at(i).name))
+            return false;
+    }
+
+    for (int i = 0; i < state.transactions.size(); ++i) {
+        const Transaction& t = state.transactions.at(i);
+        if (!isValidKind(static_cast<std::int32_t>(t.kind)) || !isValidDate(t.date)
+            || t.amount <= 0 || t.recurringRuleId < 0 || !fitsString(t.description)) {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < state.recurringRules.size(); ++i) {
+        const RecurringRule& r = state.recurringRules.at(i);
+        if (!isValidKind(static_cast<std::int32_t>(r.kind)) || !isValidDate(r.startDate)
+            || (r.hasEndDate && !isValidDate(r.endDate)) || r.amount <= 0
+            || !fitsString(r.description)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool writeState(std::ostream& out, const AppState& state) {
     return writeRaw(out, storage_v1::MAGIC, static_cast<std::streamsize>(sizeof(storage_v1::MAGIC)))
         && writeUInt32(out, storage_v1::VERSION)
@@ -329,6 +424,41 @@ void swapAppState(AppState& a, AppState& b) noexcept {
     swap(a.nextSourceId, b.nextSourceId);
     swap(a.nextTransactionId, b.nextTransactionId);
     swap(a.nextRecurringRuleId, b.nextRecurringRuleId);
+}
+
+// Moves tmpPath over target. A regular file is first moved to .bak and restored if the second rename fails.
+bool replaceTargetFile(const std::filesystem::path& tmpPath, const std::filesystem::path& target) {
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+    fs::rename(tmpPath, target, ec);
+    if (!ec)
+        return true;
+
+    if (!fs::is_regular_file(target, ec) || ec)
+        return false;
+
+    fs::path bak = target;
+    bak += ".bak";
+
+    fs::remove(bak, ec);
+    if (ec)
+        return false;
+
+    fs::rename(target, bak, ec);
+    if (ec)
+        return false;
+
+    fs::rename(tmpPath, target, ec);
+    if (ec) {
+        std::error_code restoreEc;
+        fs::rename(bak, target, restoreEc);
+        return false;
+    }
+
+    std::error_code cleanupEc;
+    fs::remove(bak, cleanupEc);
+    return true;
 }
 
 LoadStatus failureStatus(const std::istream& in) {
@@ -424,6 +554,15 @@ LoadStatus loadState(AppState& state, const std::string& path) {
         if (!recordsOk)
             return failureStatus(in);
 
+         // Nothing may follow the last record
+        if (in.peek() != std::ifstream::traits_type::eof())
+            return failureStatus(in);
+        if (in.bad())
+            return LoadStatus::IOError;
+
+        if (!isStateConsistent(tmp))
+            return LoadStatus::InvalidFile;
+
         swapAppState(state, tmp);
         return LoadStatus::Loaded;
     } catch (const std::exception&) {
@@ -440,6 +579,9 @@ bool saveState(const AppState& state, const std::string& path) {
     fs::path tmpPath;
 
     try {
+        if (!isStateConsistent(state))
+            return false;
+
         fs::path target(path);
         tmpPath = target;
         tmpPath += ".tmp";
@@ -466,11 +608,9 @@ bool saveState(const AppState& state, const std::string& path) {
         out.close();
         ok = ok && !out.fail();
 
-        // final rename then use
-        if (ok) {
-            fs::rename(tmpPath, target, ec);
-            ok = !ec;
-        }
+        // The real file is only touched by the final rename
+        if (ok)
+            ok = replaceTargetFile(tmpPath, target);
  
         if (!ok) {
             fs::remove(tmpPath, ec);

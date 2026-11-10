@@ -322,6 +322,25 @@ void testBadMagicAndVersion () {
     assert(dest.wallets.size() == 0);
 }
 
+// T26: extra bytes after the last record -> InvalidFile
+void testTrailingBytes () {
+    std::filesystem::path good = testDir() / "valid_for_trailing_test.dat";
+    std::filesystem::path bad = testDir() / "trailing_bytes.dat";
+
+    saveSample(good);
+    bool ok = copyFile(good, bad);
+    assert(ok);
+
+    std::ofstream out(bad, std::ios::binary | std::ios::app);
+    out.put('X');
+    out.close();
+
+    AppState dest;
+    LoadStatus status = loadState(dest, bad.string());
+    assert(status == LoadStatus::InvalidFile);
+    assert(dest.wallets.size() == 0);
+}
+
 // T23 file layout: the _MIN_BYTES const must equal the real 
 // size of a record has empty strings
 void testMinimumRecordSizes () {
@@ -379,6 +398,34 @@ void testMinimumRecordSizes () {
     assert(size == storage_v1::HEADER_BYTES + storage_v1::WALLET_MIN_BYTES
                        + storage_v1::CATEGORY_MIN_BYTES + storage_v1::SOURCE_MIN_BYTES
                        + storage_v1::TRANSACTION_MIN_BYTES + storage_v1::RULE_MIN_BYTES);
+}
+
+// T26: impossible record count (above the limit/more records than file capacity)
+void testImpossibleCounts () {
+    std::filesystem::path good = testDir() / "valid_for_count_tests.dat";
+    std::filesystem::path aboveLimit = testDir() / "count_above_limit.dat";
+    std::filesystem::path tooBig = testDir() / "count_larger_than_file.dat";
+
+    saveSample(good);
+
+    // The wallet record count starts at byte 28 of the header
+    bool ok = copyFile(good, aboveLimit);
+    assert(ok);
+    ok = writeUInt32At(aboveLimit, 28, storage_v1::MAX_RECORDS_PER_TYPE + 1U);
+    assert(ok);
+
+    ok = copyFile(good, tooBig);
+    assert(ok);
+    ok = writeUInt32At(tooBig, 28, 50000);
+    assert(ok);
+
+    AppState dest;
+    LoadStatus status = loadState(dest, aboveLimit.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    status = loadState(dest, tooBig.string());
+    assert(status == LoadStatus::InvalidFile);
+    assert(dest.wallets.size() == 0);
 }
 
 // T26: string length above the limit
@@ -443,6 +490,26 @@ void testOverwriteExistingFile () {
     assert(sameState(second, loaded));
 }
 
+// T26 and T27 helpers: saveState refuses data that loadState would reject,
+// so a file that cannot be read back is never written
+void testInvalidKindAndDate () {
+    std::filesystem::path path = testDir() / "invalid_state.dat";
+
+    AppState badKind;
+    fillState(badKind);
+    badKind.transactions.at(0).kind = static_cast<TransactionKind>(99);
+    bool ok = saveState(badKind, path.string());
+    assert(!ok);
+
+    AppState badDate;
+    fillState(badDate);
+    badDate.transactions.at(0).date = {2026, 2, 30};
+    ok = saveState(badDate, path.string());
+    assert(!ok);
+
+    assert(!std::filesystem::exists(path));
+}
+
 // T27: destination written fail
 void testUnwritableDestination () {
     std::filesystem::path blocker = testDir() / "blocker";
@@ -457,6 +524,28 @@ void testUnwritableDestination () {
     bool ok = saveState(state, (blocker / "finance.bin").string());
     assert(!ok);
     assert(std::filesystem::is_regular_file(blocker));
+}
+
+// T27: destination cannot be replaced -> returns false, nothing is moved or deleted
+void testDirectoryAsTarget () {
+    std::filesystem::path target = testDir() / "dir_target" / "finance.dat";
+
+    // finance.dat is a directory that already holds a file
+    std::filesystem::create_directories(target);
+    std::ofstream out(target / "keep.txt");
+    out << "important";
+    out.close();
+
+    AppState state;
+    fillState(state);
+    bool ok = saveState(state, target.string());
+    assert(!ok);
+
+    // Nothing was moved or replaced
+    assert(std::filesystem::is_directory(target));
+    assert(std::filesystem::exists(target / "keep.txt"));
+    assert(!std::filesystem::exists(target.string() + ".bak"));
+    assert(!std::filesystem::exists(target.string() + ".tmp"));
 }
 
 int main() {
@@ -485,6 +574,12 @@ int main() {
     testBadMagicAndVersion();
     std::cout << "Bad magic and version Test PASSED\n";
 
+    testTrailingBytes();
+    std::cout << "Trailing bytes Test PASSED\n";
+
+    testImpossibleCounts();
+    std::cout << "Impossible counts Test PASSED\n";
+
     testBadStringLength();
     std::cout << "Bad string length Test PASSED\n";
 
@@ -494,8 +589,15 @@ int main() {
     testOverwriteExistingFile();
     std::cout << "Overwrite existing file Test PASSED\n";
 
+     testInvalidKindAndDate();
+    std::cout << "Invalid kind and date Test PASSED\n";
+
     testUnwritableDestination();
     std::cout << "Unwritable destination Test PASSED\n";
+
+    testDirectoryAsTarget();
+    std::cout << "Directory as target Test PASSED\n";
+
 
     std::filesystem::remove_all(testDir(), ec);
 
