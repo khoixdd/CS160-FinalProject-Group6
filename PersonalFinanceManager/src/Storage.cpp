@@ -340,6 +340,99 @@ bool hasValidUniqueIds(const DynamicArray<T>& items, int nextId) {
     return true;
 }
 
+// Sort copy of every ID in the array, for binary search.
+template <typename T>
+std::unique_ptr<int[]> sortedIds(const DynamicArray<T>& items) {
+    int n = items.size();
+    std::unique_ptr<int[]> ids(new int[n > 0 ? n : 1]);
+
+    for (int i = 0; i < n; ++i)
+        ids[i] = items.at(i).id;
+
+    std::sort(ids.get(), ids.get() + n);
+    return ids;
+}
+
+bool hasId(const std::unique_ptr<int[]>& ids, int n, int id) {
+    return std::binary_search(ids.get(), ids.get() + n, id);
+}
+
+// Check that all referenced records exist and recurring cycles are unique.
+bool hasValidReferences(const AppState& state) {
+    const int nw = state.wallets.size();
+    const int nc = state.categories.size();
+    const int ns = state.incomeSources.size();
+    const int nr = state.recurringRules.size();
+
+    std::unique_ptr<int[]> wallets = sortedIds(state.wallets);
+    std::unique_ptr<int[]> categories = sortedIds(state.categories);
+    std::unique_ptr<int[]> sources = sortedIds(state.incomeSources);
+    std::unique_ptr<int[]> rules = sortedIds(state.recurringRules);
+
+    for (int i = 0; i < nr; ++i) {
+        const RecurringRule& r = state.recurringRules.at(i);
+
+        if (!hasId(wallets, nw, r.walletId))
+            return false;
+
+        if (r.kind == TransactionKind::Income
+                ? !hasId(sources, ns, r.referenceId)
+                : !hasId(categories, nc, r.referenceId))
+            return false;
+    }
+
+    const int nt = state.transactions.size();
+
+    // Store generated transaction keys to detect duplicate cycles.
+    std::unique_ptr<std::int64_t[]> keys(
+        new std::int64_t[nt > 0 ? nt : 1]
+    );
+
+    int keyCount = 0;
+
+    for (int i = 0; i < nt; ++i) {
+        const Transaction& t = state.transactions.at(i);
+
+        if (!hasId(wallets, nw, t.walletId))
+            return false;
+
+        if (t.kind == TransactionKind::Income
+                ? !hasId(sources, ns, t.referenceId)
+                : !hasId(categories, nc, t.referenceId))
+            return false;
+
+        if (t.recurringRuleId == 0) {
+            if (t.occurrenceYear != 0 || t.occurrenceMonth != 0)
+                return false;
+
+            continue;
+        }
+
+        // A generated transaction must reference a valid rule and a valid occur year-month.
+        if (!hasId(rules, nr, t.recurringRuleId)
+            || t.occurrenceYear < 1
+            || t.occurrenceYear > 9999
+            || t.occurrenceMonth < 1
+            || t.occurrenceMonth > 12) {
+            return false;
+        }
+
+        keys[keyCount++] =
+            (static_cast<std::int64_t>(t.recurringRuleId) * 10000
+             + t.occurrenceYear) * 100
+            + t.occurrenceMonth;
+    }
+
+    std::sort(keys.get(), keys.get() + keyCount);
+
+    for (int i = 1; i < keyCount; ++i) {
+        if (keys[i] == keys[i - 1])
+            return false;
+    }
+
+    return true;
+}
+
 bool isStateConsistent(const AppState& state) {
     if (tooManyRecords(state.wallets) || tooManyRecords(state.categories)
         || tooManyRecords(state.incomeSources) || tooManyRecords(state.transactions)
@@ -387,7 +480,7 @@ bool isStateConsistent(const AppState& state) {
         }
     }
 
-    return true;
+    return hasValidReferences(state);
 }
 
 bool writeState(std::ostream& out, const AppState& state) {
