@@ -290,6 +290,60 @@ int main() {
     }
     cout << "Test 25 PASSED\n";
 
-    cout << "ALL TESTS PASSED\n";
+    // Test 26: Wallet ID must not be reused after deletion
+    {
+        AppState s;
+        int id1 = -1, id2 = -1, id3 = -1;
+
+        bool ok1 = addWallet(s, "Wallet A", 1000, id1);
+        bool ok2 = addWallet(s, "Wallet B", 2000, id2);
+        bool deleted = deleteWallet(s, id2);
+        bool ok3 = addWallet(s, "Wallet C", 3000, id3);
+
+        if (!ok1 || !ok2 || !deleted || !ok3 ||
+            id1 != 1 || id2 != 2 || id3 != 3) {
+            cout << "Test 26 FAILED\n";
+            return 1;
+        }
+        cout << "Test 26 PASSED\n";
+    }
+
+    // Test 27: IncomeSource ID must not be reused
+    {
+        AppState s;
+        int id1 = -1, id2 = -1, id3 = -1;
+
+        bool ok1 = addIncomeSource(s, "Salary", id1);
+        bool ok2 = addIncomeSource(s, "Bonus", id2);
+        bool deleted = deleteIncomeSource(s, id2);
+        bool ok3 = addIncomeSource(s, "Allowance", id3);
+
+        if (!ok1 || !ok2 || !deleted || !ok3 ||
+            id1 != 1 || id2 != 2 || id3 != 3) {
+            cout << "Test 27 FAILED\n";
+            return 1;
+        }
+        cout << "Test 27 PASSED\n";
+    }
+
+    // Test 28: ExpenseCategory ID must not be reused
+    {
+        AppState s;
+        int id1 = -1, id2 = -1, id3 = -1;
+
+        bool ok1 = addExpenseCategory(s, "Food", id1);
+        bool ok2 = addExpenseCategory(s, "Transport", id2);
+        bool deleted = deleteExpenseCategory(s, id2);
+        bool ok3 = addExpenseCategory(s, "Books", id3);
+
+        if (!ok1 || !ok2 || !deleted || !ok3 ||
+            id1 != 1 || id2 != 2 || id3 != 3) {
+            cout << "Test 28 FAILED\n";
+            return 1;
+        }
+        cout << "Test 28 PASSED\n";
+    }
+
+    cout << "ALL 28 TESTS PASSED\n";
     return 0;
 }
