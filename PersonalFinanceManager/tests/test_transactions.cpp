@@ -334,7 +334,6 @@ int main() {
 
     cout << "Test 25 PASSED\n";
 
-
     // Test 26 (T05): Expense stores correct information
     int expenseId = -1;
 
@@ -375,6 +374,33 @@ int main() {
 
     cout << "Test 26 PASSED\n";
 
-    cout << "ALL 26 TESTS PASSED\n";
+    // Test 27: List all transactions
+    const DynamicArray<Transaction>& transactions =
+        listTransactions(checkState);
+
+    if (transactions.size() != 2) {
+        cout << "Test 27 FAILED\n";
+        return 1;
+    }
+    cout << "Test 27 PASSED\n";
+
+    // Test 28: Preserve insertion order
+    if (transactions.at(0).id != transactionId ||
+        transactions.at(1).id != expenseId) {
+        cout << "Test 28 FAILED\n";
+        return 1;
+    }
+    cout << "Test 28 PASSED\n";
+
+    // Test 29: Empty transaction list
+    AppState emptyState;
+
+    if (listTransactions(emptyState).size() != 0) {
+        cout << "Test 29 FAILED\n";
+        return 1;
+    }
+    cout << "Test 29 PASSED\n";
+
+    cout << "ALL 29 TESTS PASSED\n";
     return 0;
 }

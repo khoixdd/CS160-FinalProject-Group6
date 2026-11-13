@@ -135,3 +135,7 @@ bool addExpense(AppState& state,
 
     return addTransaction(state, t, outId);
 }
+
+const DynamicArray<Transaction>& listTransactions(const AppState& state) {
+    return state.transactions;
+}
