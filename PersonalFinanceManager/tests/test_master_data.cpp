@@ -290,6 +290,278 @@ int main() {
     }
     cout << "Test 25 PASSED\n";
 
-    cout << "ALL TESTS PASSED\n";
+    // Test 26: Wallet ID must not be reused after deletion
+    {
+        AppState s;
+        int id1 = -1, id2 = -1, id3 = -1;
+
+        bool ok1 = addWallet(s, "Wallet A", 1000, id1);
+        bool ok2 = addWallet(s, "Wallet B", 2000, id2);
+        bool deleted = deleteWallet(s, id2);
+        bool ok3 = addWallet(s, "Wallet C", 3000, id3);
+
+        if (!ok1 || !ok2 || !deleted || !ok3 ||
+            id1 != 1 || id2 != 2 || id3 != 3) {
+            cout << "Test 26 FAILED\n";
+            return 1;
+        }
+        cout << "Test 26 PASSED\n";
+    }
+
+    // Test 27: IncomeSource ID must not be reused
+    {
+        AppState s;
+        int id1 = -1, id2 = -1, id3 = -1;
+
+        bool ok1 = addIncomeSource(s, "Salary", id1);
+        bool ok2 = addIncomeSource(s, "Bonus", id2);
+        bool deleted = deleteIncomeSource(s, id2);
+        bool ok3 = addIncomeSource(s, "Allowance", id3);
+
+        if (!ok1 || !ok2 || !deleted || !ok3 ||
+            id1 != 1 || id2 != 2 || id3 != 3) {
+            cout << "Test 27 FAILED\n";
+            return 1;
+        }
+        cout << "Test 27 PASSED\n";
+    }
+
+    // Test 28: ExpenseCategory ID must not be reused
+    {
+        AppState s;
+        int id1 = -1, id2 = -1, id3 = -1;
+
+        bool ok1 = addExpenseCategory(s, "Food", id1);
+        bool ok2 = addExpenseCategory(s, "Transport", id2);
+        bool deleted = deleteExpenseCategory(s, id2);
+        bool ok3 = addExpenseCategory(s, "Books", id3);
+
+        if (!ok1 || !ok2 || !deleted || !ok3 ||
+            id1 != 1 || id2 != 2 || id3 != 3) {
+            cout << "Test 28 FAILED\n";
+            return 1;
+        }
+        cout << "Test 28 PASSED\n";
+    }
+
+    // Test 29: Failed wallet edit preserves original data
+    {
+        AppState s;
+        int id = -1;
+
+        addWallet(s, "Cash", 100000, id);
+
+        bool result = editWallet(s, id, "", 500000);
+        const Wallet* wallet = findWallet(s, id);
+
+        if (result || wallet == nullptr ||
+            wallet->name != "Cash" ||
+            wallet->openingBalance != 100000) {
+            cout << "Test 29 FAILED\n";
+            return 1;
+        }
+
+        cout << "Test 29 PASSED\n";
+    }
+
+    // Test 30: Failed source edit preserves original data
+    {
+        AppState s;
+        int id = -1;
+
+        addIncomeSource(s, "Salary", id);
+
+        bool result = editIncomeSource(s, id, "");
+        const IncomeSource* source =
+            findIncomeSource(s, id);
+
+        if (result || source == nullptr ||
+            source->name != "Salary") {
+            cout << "Test 30 FAILED\n";
+            return 1;
+        }
+
+        cout << "Test 30 PASSED\n";
+    }
+
+    // Test 31: Failed category edit preserves original data
+    {
+        AppState s;
+        int id = -1;
+
+        addExpenseCategory(s, "Food", id);
+
+        bool result = editExpenseCategory(s, id, "");
+        const ExpenseCategory* category =
+            findExpenseCategory(s, id);
+
+        if (result || category == nullptr ||
+            category->name != "Food") {
+            cout << "Test 31 FAILED\n";
+            return 1;
+        }
+
+        cout << "Test 31 PASSED\n";
+    }
+
+    // Test 32: Failed delete preserves wallet data
+    {
+        AppState s;
+        int walletId = -1;
+        int sourceId = -1;
+        int transactionId = -1;
+
+        addWallet(s, "Cash", 100000, walletId);
+        addIncomeSource(s, "Salary", sourceId);
+
+        Transaction t;
+        t.id = s.nextTransactionId++;
+        t.date = {2026, 11, 13};
+        t.kind = TransactionKind::Income;
+        t.walletId = walletId;
+        t.referenceId = sourceId;
+        t.amount = 50000;
+
+        s.transactions.pushBack(t);
+        transactionId = t.id;
+
+        bool result = deleteWallet(s, walletId);
+        const Wallet* wallet = findWallet(s, walletId);
+
+        if (result || wallet == nullptr ||
+            wallet->name != "Cash" ||
+            wallet->openingBalance != 100000 ||
+            s.transactions.size() != 1 ||
+            s.transactions.at(0).id != transactionId) {
+            cout << "Test 32 FAILED\n";
+            return 1;
+        }
+
+        cout << "Test 32 PASSED\n";
+    }
+
+    // Test 33: Failed add does not consume IDs
+    {
+        AppState s;
+        int id = -1;
+
+        bool failed = addWallet(s, "", 100000, id);
+        int nextId = s.nextWalletId;
+
+        bool added = addWallet(s, "Cash", 100000, id);
+
+        if (failed || !added ||
+            nextId != 1 ||
+            id != 1 ||
+            s.nextWalletId != 2 ||
+            s.wallets.size() != 1) {
+            cout << "Test 33 FAILED\n";
+            return 1;
+        }
+
+        cout << "Test 33 PASSED\n";
+    }
+
+    // Test 34: Delete the first wallet
+    {
+        AppState s;
+        int a, b, c;
+        addWallet(s, "A", 100, a);
+        addWallet(s, "B", 200, b);
+        addWallet(s, "C", 300, c);
+
+        bool deleted = deleteWallet(s, a);
+
+        if (!deleted || s.wallets.size() != 2 ||
+            s.wallets.at(0).id != b ||
+            s.wallets.at(1).id != c ||
+            findWallet(s, a) != nullptr) {
+            cout << "Test 34 FAILED\n";
+            return 1;
+        }
+        cout << "Test 34 PASSED\n";
+    }
+
+    // Test 35: Delete a wallet in the middle
+    {
+        AppState s;
+        int a, b, c;
+        addWallet(s, "A", 100, a);
+        addWallet(s, "B", 200, b);
+        addWallet(s, "C", 300, c);
+
+        bool deleted = deleteWallet(s, b);
+
+        if (!deleted || s.wallets.size() != 2 ||
+            s.wallets.at(0).id != a ||
+            s.wallets.at(1).id != c ||
+            findWallet(s, b) != nullptr) {
+            cout << "Test 35 FAILED\n";
+            return 1;
+        }
+        cout << "Test 35 PASSED\n";
+    }
+
+    // Test 36: Delete the last wallet
+    {
+        AppState s;
+        int a, b, c;
+        addWallet(s, "A", 100, a);
+        addWallet(s, "B", 200, b);
+        addWallet(s, "C", 300, c);
+
+        bool deleted = deleteWallet(s, c);
+
+        if (!deleted || s.wallets.size() != 2 ||
+            s.wallets.at(0).id != a ||
+            s.wallets.at(1).id != b ||
+            findWallet(s, c) != nullptr) {
+            cout << "Test 36 FAILED\n";
+            return 1;
+        }
+        cout << "Test 36 PASSED\n";
+    }
+
+    // Test 37: Add multiple wallets
+    {
+        AppState s;
+        bool valid = true;
+
+        for (int i = 0; i < 100; i++) {
+            int id = -1;
+            if (!addWallet(s, "Wallet " + std::to_string(i),
+                           i * 1000, id) || id != i + 1) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (!valid || s.wallets.size() != 100 ||
+            s.wallets.at(0).id != 1 ||
+            s.wallets.at(99).id != 100) {
+            cout << "Test 37 FAILED\n";
+            return 1;
+        }
+        cout << "Test 37 PASSED\n";
+    }
+
+    // Test 38: Deleting nonexistent wallet preserves data
+    {
+        AppState s;
+        int id;
+        addWallet(s, "Cash", 100000, id);
+
+        bool deleted = deleteWallet(s, 999);
+
+        if (deleted || s.wallets.size() != 1 ||
+            s.wallets.at(0).name != "Cash" ||
+            s.nextWalletId != 2) {
+            cout << "Test 38 FAILED\n";
+            return 1;
+        }
+        cout << "Test 38 PASSED\n";
+    }
+
+    cout << "ALL 38 TESTS PASSED\n";
     return 0;
 }
