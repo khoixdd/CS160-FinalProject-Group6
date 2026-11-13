@@ -401,6 +401,53 @@ int main() {
     }
     cout << "Test 29 PASSED\n";
 
-    cout << "ALL 29 TESTS PASSED\n";
+    // Test 30: Transaction IDs remain unique
+    if (transactions.at(0).id == transactions.at(1).id) {
+        cout << "Test 30 FAILED\n";
+        return 1;
+    }
+    cout << "Test 30 PASSED\n";
+
+    // Test 31: Transaction data remains unchanged after renaming source
+    const Transaction* oldIncome =
+        findTransaction(checkState, transactionId);
+
+    if (oldIncome == nullptr ||
+        oldIncome->referenceId != salaryId ||
+        oldIncome->amount != 1000) {
+        cout << "Test 31 FAILED\n";
+        return 1;
+    }
+    cout << "Test 31 PASSED\n";
+
+    // Test 32: Reject deleting referenced wallet
+    if (deleteWallet(checkState, cashId)) {
+        cout << "Test 32 FAILED\n";
+        return 1;
+    }
+    cout << "Test 32 PASSED\n";
+
+    // Test 33: Reject deleting referenced income source
+    if (deleteIncomeSource(checkState, salaryId)) {
+        cout << "Test 33 FAILED\n";
+        return 1;
+    }
+    cout << "Test 33 PASSED\n";
+
+    // Test 34: Reject deleting referenced expense category
+    if (deleteExpenseCategory(checkState, foodId)) {
+        cout << "Test 34 FAILED\n";
+        return 1;
+    }
+    cout << "Test 34 PASSED\n";
+
+    // Test 35: Failed deletions preserve transaction count
+    if (listTransactions(checkState).size() != 2) {
+        cout << "Test 35 FAILED\n";
+        return 1;
+    }
+    cout << "Test 35 PASSED\n";
+
+    cout << "ALL 35 TESTS PASSED\n";
     return 0;
 }
