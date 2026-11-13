@@ -462,6 +462,106 @@ int main() {
         cout << "Test 33 PASSED\n";
     }
 
-    cout << "ALL 33 TESTS PASSED\n";
+    // Test 34: Delete the first wallet
+    {
+        AppState s;
+        int a, b, c;
+        addWallet(s, "A", 100, a);
+        addWallet(s, "B", 200, b);
+        addWallet(s, "C", 300, c);
+
+        bool deleted = deleteWallet(s, a);
+
+        if (!deleted || s.wallets.size() != 2 ||
+            s.wallets.at(0).id != b ||
+            s.wallets.at(1).id != c ||
+            findWallet(s, a) != nullptr) {
+            cout << "Test 34 FAILED\n";
+            return 1;
+        }
+        cout << "Test 34 PASSED\n";
+    }
+
+    // Test 35: Delete a wallet in the middle
+    {
+        AppState s;
+        int a, b, c;
+        addWallet(s, "A", 100, a);
+        addWallet(s, "B", 200, b);
+        addWallet(s, "C", 300, c);
+
+        bool deleted = deleteWallet(s, b);
+
+        if (!deleted || s.wallets.size() != 2 ||
+            s.wallets.at(0).id != a ||
+            s.wallets.at(1).id != c ||
+            findWallet(s, b) != nullptr) {
+            cout << "Test 35 FAILED\n";
+            return 1;
+        }
+        cout << "Test 35 PASSED\n";
+    }
+
+    // Test 36: Delete the last wallet
+    {
+        AppState s;
+        int a, b, c;
+        addWallet(s, "A", 100, a);
+        addWallet(s, "B", 200, b);
+        addWallet(s, "C", 300, c);
+
+        bool deleted = deleteWallet(s, c);
+
+        if (!deleted || s.wallets.size() != 2 ||
+            s.wallets.at(0).id != a ||
+            s.wallets.at(1).id != b ||
+            findWallet(s, c) != nullptr) {
+            cout << "Test 36 FAILED\n";
+            return 1;
+        }
+        cout << "Test 36 PASSED\n";
+    }
+
+    // Test 37: Add multiple wallets
+    {
+        AppState s;
+        bool valid = true;
+
+        for (int i = 0; i < 100; i++) {
+            int id = -1;
+            if (!addWallet(s, "Wallet " + std::to_string(i),
+                           i * 1000, id) || id != i + 1) {
+                valid = false;
+                break;
+            }
+        }
+
+        if (!valid || s.wallets.size() != 100 ||
+            s.wallets.at(0).id != 1 ||
+            s.wallets.at(99).id != 100) {
+            cout << "Test 37 FAILED\n";
+            return 1;
+        }
+        cout << "Test 37 PASSED\n";
+    }
+
+    // Test 38: Deleting nonexistent wallet preserves data
+    {
+        AppState s;
+        int id;
+        addWallet(s, "Cash", 100000, id);
+
+        bool deleted = deleteWallet(s, 999);
+
+        if (deleted || s.wallets.size() != 1 ||
+            s.wallets.at(0).name != "Cash" ||
+            s.nextWalletId != 2) {
+            cout << "Test 38 FAILED\n";
+            return 1;
+        }
+        cout << "Test 38 PASSED\n";
+    }
+
+    cout << "ALL 38 TESTS PASSED\n";
     return 0;
 }
