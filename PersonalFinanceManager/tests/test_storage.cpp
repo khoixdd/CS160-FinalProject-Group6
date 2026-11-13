@@ -548,6 +548,77 @@ void testDirectoryAsTarget () {
     assert(!std::filesystem::exists(target.string() + ".tmp"));
 }
 
+// T23 and T24: IDs of deleted records are never reused after save + reload
+void testDeletedIdsNotReused () {
+    std::filesystem::path path = testDir() / "ids_after_erase.bin";
+
+    AppState state;
+    fillState(state);
+    assert(state.transactions.eraseAt(1)); // remove transaction 2, counter stays 4
+    assert(saveState(state, path.string()));
+
+    AppState loaded;
+    assert(loadState(loaded, path.string()) == LoadStatus::Loaded);
+    assert(loaded.transactions.size() == 2);
+    assert(loaded.transactions.at(0).id == 1 && loaded.transactions.at(1).id == 3);
+    assert(loaded.nextTransactionId == 4);
+
+    // A counter that would hand out an existing ID must be refused on save
+    loaded.nextTransactionId = 3;
+    assert(!saveState(loaded, (testDir() / "bad_counter.bin").string()));
+}
+
+// T26: records that point to IDs that do not exist are refused (save and load)
+void testDanglingReferencesRejected () {
+    std::filesystem::path path = testDir() / "dangling.bin";
+
+    AppState badWallet;
+    fillState(badWallet);
+    badWallet.transactions.at(0).walletId = 77;
+    assert(!saveState(badWallet, path.string()));
+
+    AppState badSource;
+    fillState(badSource);
+    badSource.transactions.at(0).referenceId = 88; // income -> unknown source
+    assert(!saveState(badSource, path.string()));
+
+    AppState badRuleRef;
+    fillState(badRuleRef);
+    badRuleRef.recurringRules.at(0).walletId = 77;
+    assert(!saveState(badRuleRef, path.string()));
+
+    AppState orphanRule;
+    fillState(orphanRule);
+    orphanRule.transactions.at(2).recurringRuleId = 55; // rule 55 does not exist
+    assert(!saveState(orphanRule, path.string()));
+
+    AppState badMonth;
+    fillState(badMonth);
+    badMonth.transactions.at(2).occurrenceMonth = 99;
+    assert(!saveState(badMonth, path.string()));
+
+    AppState manualWithCycle;
+    fillState(manualWithCycle);
+    manualWithCycle.transactions.at(0).occurrenceMonth = 11; 
+    assert(!saveState(manualWithCycle, path.string()));
+
+    assert(!std::filesystem::exists(path));
+}
+
+// T20 and T26: the same (rule, year, month) may not exist twice in a file
+void testDuplicateCycleRejected () {
+    std::filesystem::path path = testDir() / "duplicate_cycle.bin";
+
+    AppState state;
+    fillState(state);
+    Transaction dup = state.transactions.at(2);
+    dup.id = 4;
+    assert(state.transactions.pushBack(dup));
+    state.nextTransactionId = 5;
+    assert(!saveState(state, path.string()));
+    assert(!std::filesystem::exists(path));
+}
+
 int main() {
     std::error_code ec;
     std::filesystem::remove_all(testDir(), ec);
@@ -598,6 +669,14 @@ int main() {
     testDirectoryAsTarget();
     std::cout << "Directory as target Test PASSED\n";
 
+    testDeletedIdsNotReused();
+    std::cout << "Deleted IDs not reused Test PASSED\n";
+
+    testDanglingReferencesRejected();
+    std::cout << "Dangling references rejected Test PASSED\n";
+
+    testDuplicateCycleRejected();
+    std::cout << "Duplicate recurring cycle rejected Test PASSED\n";
 
     std::filesystem::remove_all(testDir(), ec);
 
