@@ -27,6 +27,7 @@ bool summarizeRange(const AppState& state, const Date& from,
     out.net = out.income - out.expense;
     return true;
 }
+
 // Returns true if year is one of the selected years.
 // If the user typed the same year twice, this still answers true only once per
 // transaction, so nothing is counted twice.
@@ -36,12 +37,12 @@ static bool isYearSelected(const int* years, int yearCount, int year) {
     }
     return false;
 }
- 
+
 // At least one year must be selected.
 static bool isYearSelectionValid(const int* years, int yearCount) {
     return years != nullptr && yearCount > 0;
 }
- 
+
 // W2-C-02: one row per wallet, in the same order as state.wallets.
 // A wallet with no transactions in the range still gets a row of 0 / 0.
 bool summarizeByWallet(const AppState& state, const Date& from, const Date& to, DynamicArray<WalletSummary>& out) {
@@ -74,7 +75,7 @@ bool summarizeByWallet(const AppState& state, const Date& from, const Date& to, 
     }
     return true;
 }
- 
+
 // W2-C-03: income / expense / net for all transactions in the selected years.
 bool summarizeYears(const AppState& state, const int* years, int yearCount, MoneySummary& out) {
     out = MoneySummary();
@@ -95,7 +96,7 @@ bool summarizeYears(const AppState& state, const int* years, int yearCount, Mone
     out.net = out.income - out.expense;
     return true;
 }
- 
+
 // W3-C-01: one row per income source (same order as state.incomeSources).
 // A source with no income in the selected years gets total 0.
 bool incomeBySource(const AppState& state, const int* years, int yearCount, DynamicArray<SourceTotal>& out) {
@@ -121,7 +122,7 @@ bool incomeBySource(const AppState& state, const int* years, int yearCount, Dyna
     }
     return true;
 }
- 
+
 // W3-C-02: one row per expense category (same order as state.categories).
 // A category with no expense in the selected years gets total 0.
 bool expenseByCategory(const AppState& state, const int* years, int yearCount,

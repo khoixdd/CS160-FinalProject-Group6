@@ -130,7 +130,7 @@ static void buildFullFixture(AppState& s) {
     s.categories.pushBack(transport);
     s.categories.pushBack(rent);
 }
- 
+
 // W2-C-02 / T10: whole fixture range. Cash 1000/350, Bank 500/70, Savings 0/0.
 static void testWalletReportWholeRange() {
     AppState s;
@@ -150,7 +150,7 @@ static void testWalletReportWholeRange() {
     CHECK_EQ(rows.at(2).income, 0);
     CHECK_EQ(rows.at(2).expense, 0);
 }
- 
+
 // W2-C-02 / T10: wallet rows add up to the period totals (500 / 220).
 static void testWalletReportMatchesRangeTotals() {
     AppState s;
@@ -175,7 +175,7 @@ static void testWalletReportMatchesRangeTotals() {
     CHECK_EQ(inc, 500);
     CHECK_EQ(exp, 220);
 }
- 
+
 // W2-C-02: reversed range is rejected and returns no rows.
 static void testWalletReportReversedAndEmpty() {
     AppState s;
@@ -185,7 +185,7 @@ static void testWalletReportReversedAndEmpty() {
     DynamicArray<WalletSummary> rows;
     CHECK_EQ(summarizeByWallet(s, a, b, rows), false);
     CHECK_EQ(rows.size(), 0);
- 
+
     Date from; from.year = 2024; from.month = 1; from.day = 1;
     Date to;   to.year = 2024;   to.month = 12;  to.day = 31;
     CHECK_EQ(summarizeByWallet(s, from, to, rows), true);
@@ -195,7 +195,7 @@ static void testWalletReportReversedAndEmpty() {
         CHECK_EQ(rows.at(i).expense, 0);
     }
 }
- 
+
 // W2-C-03 / T11: one year, other year, both years.
 static void testYearSummary() {
     AppState s;
@@ -206,20 +206,20 @@ static void testYearSummary() {
     CHECK_EQ(r.income, EXP_INCOME_2025);
     CHECK_EQ(r.expense, EXP_EXPENSE_2025);
     CHECK_EQ(r.net, 800);
- 
+
     int y2026[] = {2026};
     CHECK_EQ(summarizeYears(s, y2026, 1, r), true);
     CHECK_EQ(r.income, EXP_INCOME_2026);
     CHECK_EQ(r.expense, EXP_EXPENSE_2026);
     CHECK_EQ(r.net, 280);
- 
+
     int both[] = {2025, 2026};
     CHECK_EQ(summarizeYears(s, both, 2, r), true);
     CHECK_EQ(r.income, EXP_INCOME_ALL);
     CHECK_EQ(r.expense, EXP_EXPENSE_ALL);
     CHECK_EQ(r.net, EXP_NET_ALL);
 }
- 
+
 // W2-C-03 / T12: repeated years are not double counted; empty year; bad input.
 static void testYearSummaryEdgeCases() {
     AppState s;
@@ -230,43 +230,43 @@ static void testYearSummaryEdgeCases() {
     CHECK_EQ(r.income, EXP_INCOME_ALL);
     CHECK_EQ(r.expense, EXP_EXPENSE_ALL);
     CHECK_EQ(r.net, EXP_NET_ALL);
- 
+
     int none[] = {2024};
     CHECK_EQ(summarizeYears(s, none, 1, r), true);
     CHECK_EQ(r.income, 0);
     CHECK_EQ(r.expense, 0);
     CHECK_EQ(r.net, 0);
- 
+
     CHECK_EQ(summarizeYears(s, none, 0, r), false);      // nothing selected
     CHECK_EQ(summarizeYears(s, nullptr, 1, r), false);   // no year list
 }
- 
+
 // W3-C-01 / T13: income by source. 2025: Salary 1000. 2026: Gift 500.
 static void testIncomeBySource() {
     AppState s;
     buildFullFixture(s);
     DynamicArray<SourceTotal> rows;
- 
+
     int y2025[] = {2025};
     CHECK_EQ(incomeBySource(s, y2025, 1, rows), true);
     CHECK_EQ(rows.size(), 3);
     CHECK_EQ(rows.at(0).sourceId, 1);  CHECK_EQ(rows.at(0).total, 1000);
     CHECK_EQ(rows.at(1).sourceId, 2);  CHECK_EQ(rows.at(1).total, 0);
     CHECK_EQ(rows.at(2).sourceId, 3);  CHECK_EQ(rows.at(2).total, 0);
- 
+
     int y2026[] = {2026};
     CHECK_EQ(incomeBySource(s, y2026, 1, rows), true);
     CHECK_EQ(rows.at(0).total, 0);
     CHECK_EQ(rows.at(1).total, 500);
     CHECK_EQ(rows.at(2).total, 0);
- 
+
     // Both years (with a repeated year): Salary 1000, Gift 500, Bonus 0.
     int both[] = {2025, 2026, 2026};
     CHECK_EQ(incomeBySource(s, both, 3, rows), true);
     CHECK_EQ(rows.at(0).total, 1000);
     CHECK_EQ(rows.at(1).total, 500);
     CHECK_EQ(rows.at(2).total, 0);
- 
+
     // Rows add up to the annual income total.
     std::int64_t sum = 0;
     for (int i = 0; i < rows.size(); ++i) sum += rows.at(i).total;
@@ -274,37 +274,37 @@ static void testIncomeBySource() {
     CHECK_EQ(summarizeYears(s, both, 3, r), true);
     CHECK_EQ(sum, r.income);
     CHECK_EQ(sum, EXP_INCOME_ALL);
- 
+
     CHECK_EQ(incomeBySource(s, y2025, 0, rows), false);
 }
- 
+
 // W3-C-02 / T14: expense by category. The 2025-12-31 / 2026-01-01 boundary
 // must put each expense in the right year.
 static void testExpenseByCategory() {
     AppState s;
     buildFullFixture(s);
     DynamicArray<CategoryTotal> rows;
- 
+
     int y2025[] = {2025};
     CHECK_EQ(expenseByCategory(s, y2025, 1, rows), true);
     CHECK_EQ(rows.size(), 3);
     CHECK_EQ(rows.at(0).categoryId, 1);  CHECK_EQ(rows.at(0).total, 200);
     CHECK_EQ(rows.at(1).categoryId, 2);  CHECK_EQ(rows.at(1).total, 0);
     CHECK_EQ(rows.at(2).categoryId, 3);  CHECK_EQ(rows.at(2).total, 0);
- 
+
     int y2026[] = {2026};
     CHECK_EQ(expenseByCategory(s, y2026, 1, rows), true);
     CHECK_EQ(rows.at(0).total, 150);
     CHECK_EQ(rows.at(1).total, 70);
     CHECK_EQ(rows.at(2).total, 0);
- 
+
     // Both years: Food 350, Transport 70, Rent 0.
     int both[] = {2025, 2026};
     CHECK_EQ(expenseByCategory(s, both, 2, rows), true);
     CHECK_EQ(rows.at(0).total, 350);
     CHECK_EQ(rows.at(1).total, 70);
     CHECK_EQ(rows.at(2).total, 0);
- 
+
     // Rows add up to the annual expense total.
     std::int64_t sum = 0;
     for (int i = 0; i < rows.size(); ++i) sum += rows.at(i).total;
@@ -312,11 +312,11 @@ static void testExpenseByCategory() {
     CHECK_EQ(summarizeYears(s, both, 2, r), true);
     CHECK_EQ(sum, r.expense);
     CHECK_EQ(sum, EXP_EXPENSE_ALL);
- 
+
     CHECK_EQ(expenseByCategory(s, nullptr, 2, rows), false);
 }
- 
- 
+
+
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
