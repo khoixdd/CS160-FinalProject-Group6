@@ -1,7 +1,11 @@
 
 #include <iostream>
+#include <cstdio>
+
 #include "Transactions.h"
 #include "MasterData.h"
+#include "Recurring.h"
+#include "Storage.h"
 
 using namespace std;
 
@@ -448,6 +452,244 @@ int main() {
     }
     cout << "Test 35 PASSED\n";
 
-    cout << "ALL 35 TESTS PASSED\n";
+
+    // Test 36: Transaction IDs remain unique after many insertions
+    {
+        AppState manyState;
+        int manyWalletId = -1;
+        int manySourceId = -1;
+
+        bool setup =
+            addWallet(manyState, "Cash", 100000, manyWalletId) &&
+            addIncomeSource(manyState, "Salary", manySourceId);
+
+        if (!setup) {
+            cout << "Test 36 FAILED: setup\n";
+            return 1;
+        }
+
+        bool valid = true;
+
+        for (int i = 0; i < 100; i++) {
+            int newId = -1;
+
+            if (!addIncome(manyState,
+                           {2026, 11, 19},
+                           1000,
+                           manyWalletId,
+                           manySourceId,
+                           "Bulk transaction",
+                           newId) ||
+                newId != i + 1) {
+                valid = false;
+                break;
+            }
+        }
+
+        const DynamicArray<Transaction>& records =
+            listTransactions(manyState);
+
+        if (!valid ||
+            records.size() != 100 ||
+            manyState.nextTransactionId != 101) {
+            cout << "Test 36 FAILED\n";
+            return 1;
+        }
+
+        for (int i = 0; i < records.size(); i++) {
+            if (records.at(i).id != i + 1) {
+                cout << "Test 36 FAILED\n";
+                return 1;
+            }
+        }
+
+        if (findTransaction(manyState, 1) == nullptr ||
+            findTransaction(manyState, 50) == nullptr ||
+            findTransaction(manyState, 100) == nullptr) {
+            cout << "Test 36 FAILED\n";
+            return 1;
+        }
+
+        cout << "Test 36 PASSED\n";
+    }
+
+    // Test 37: Transaction ID remains correct after save/load
+    {
+        AppState original;
+
+        int walletId = -1;
+        int sourceId = -1;
+        int ruleId = -1;
+        int generatedId = -1;
+        int manualId = -1;
+        int count = 0;
+
+        const string testFile = "build/test_transactions_save_load.bin";
+        std::remove(testFile.c_str());
+
+        // Create master data
+        if (!addWallet(original, "Cash", 1000000, walletId) ||
+            !addIncomeSource(original, "Salary", sourceId)) {
+            cout << "Test 37 FAILED: setup\n";
+            return 1;
+        }
+
+        // Create recurring rule
+        RecurringRule rule;
+        rule.kind = TransactionKind::Income;
+        rule.referenceId = sourceId;
+        rule.walletId = walletId;
+        rule.amount = 250000;
+        rule.startDate = {2026, 11, 1};
+        rule.description = "Monthly salary";
+
+        if (!addRecurringRule(original, rule, ruleId)) {
+            cout << "Test 37 FAILED: recurring rule\n";
+            return 1;
+        }
+
+        // Generate one recurring transaction
+        if (!generateCurrentMonth(original, {2026, 11, 19}, count) ||
+            count != 1) {
+            cout << "Test 37 FAILED: generation\n";
+            return 1;
+        }
+
+        generatedId = original.transactions.at(0).id;
+
+        // Save application state
+        if (!saveState(original, testFile)) {
+            cout << "Test 37 FAILED: save\n";
+            return 1;
+        }
+
+        // Load application state
+        AppState loaded;
+
+        if (loadState(loaded, testFile) != LoadStatus::Loaded) {
+            std::remove(testFile.c_str());
+            cout << "Test 37 FAILED: load\n";
+            return 1;
+        }
+
+        // Verify recurring transaction metadata
+        const Transaction* generated =
+            findTransaction(loaded, generatedId);
+
+        if (generated == nullptr ||
+            generated->recurringRuleId != ruleId ||
+            generated->occurrenceYear != 2026 ||
+            generated->occurrenceMonth != 11 ||
+            loaded.nextTransactionId != original.nextTransactionId) {
+            std::remove(testFile.c_str());
+            cout << "Test 37 FAILED: restored data\n";
+            return 1;
+        }
+
+        // Ensure the same month does not generate a duplicate
+        if (!generateCurrentMonth(loaded, {2026, 11, 19}, count) ||
+            count != 0 ||
+            loaded.transactions.size() != 1) {
+            std::remove(testFile.c_str());
+            cout << "Test 37 FAILED: duplicate generation\n";
+            return 1;
+        }
+
+        // Add a manual transaction after loading
+        if (!addIncome(loaded, {2026, 11, 19}, 50000,
+                       walletId, sourceId,
+                       "Manual income after load", manualId) ||
+            manualId != generatedId + 1 ||
+            loaded.nextTransactionId != manualId + 1 ||
+            loaded.transactions.size() != 2) {
+            std::remove(testFile.c_str());
+            cout << "Test 37 FAILED: new transaction ID\n";
+            return 1;
+        }
+
+        const Transaction* manual =
+            findTransaction(loaded, manualId);
+
+        if (manual == nullptr ||
+            manual->recurringRuleId != 0 ||
+            manual->occurrenceYear != 0 ||
+            manual->occurrenceMonth != 0) {
+            std::remove(testFile.c_str());
+            cout << "Test 37 FAILED: manual transaction metadata\n";
+            return 1;
+        }
+
+        std::remove(testFile.c_str());
+        cout << "Test 37 PASSED\n";
+    }
+
+    // Test 38: Generated recurring transaction appears in listing
+    {
+        AppState generatedState;
+
+        int walletId = -1;
+        int sourceId = -1;
+        int ruleId = -1;
+        int count = 0;
+
+        if (!addWallet(generatedState, "Cash", 100000, walletId) ||
+            !addIncomeSource(generatedState, "Salary", sourceId)) {
+            cout << "Test 38 FAILED: setup\n";
+            return 1;
+        }
+
+        RecurringRule rule;
+        rule.kind = TransactionKind::Income;
+        rule.walletId = walletId;
+        rule.referenceId = sourceId;
+        rule.amount = 250000;
+        rule.startDate = {2026, 11, 1};
+        rule.description = "Monthly salary";
+
+        if (!addRecurringRule(generatedState, rule, ruleId) ||
+            !generateCurrentMonth(generatedState, {2026, 11, 19}, count) ||
+            count != 1) {
+            cout << "Test 38 FAILED: generation\n";
+            return 1;
+        }
+
+        const DynamicArray<Transaction>& records =
+            listTransactions(generatedState);
+
+        if (records.size() != 1) {
+            cout << "Test 38 FAILED: listing size\n";
+            return 1;
+        }
+
+        const Transaction& t = records.at(0);
+
+        const Wallet* wallet =
+            findWallet(generatedState, t.walletId);
+
+        const IncomeSource* source =
+            findIncomeSource(generatedState, t.referenceId);
+
+        if (t.kind != TransactionKind::Income ||
+            t.amount != 250000 ||
+            t.date.year != 2026 ||
+            t.date.month != 11 ||
+            t.date.day != 1 ||
+            t.walletId != walletId ||
+            t.referenceId != sourceId ||
+            t.recurringRuleId != ruleId ||
+            t.occurrenceYear != 2026 ||
+            t.occurrenceMonth != 11 ||
+            wallet == nullptr ||
+            wallet->name != "Cash" ||
+            source == nullptr ||
+            source->name != "Salary") {
+            cout << "Test 38 FAILED: transaction data\n";
+            return 1;
+        }
+
+        cout << "Test 38 PASSED\n";
+    }
+
+    cout << "ALL 38 TESTS PASSED\n";
     return 0;
 }
