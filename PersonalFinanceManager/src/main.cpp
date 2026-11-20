@@ -184,12 +184,12 @@ void printReferences(const AppState& state, TransactionKind kind, int walletId, 
 }
 
 void listTransactionsScreen(const AppState& state) {
-    // Read AppState directly until B supplies the declared listTransactions API.
-    if (state.transactions.size() == 0) {
+    const DynamicArray<Transaction>& transactions = listTransactions(state);
+    if (transactions.size() == 0) {
         std::cout << "No transactions.\n";
     }
-    for (int i = 0; i < state.transactions.size(); ++i) {
-        const Transaction& t = state.transactions.at(i);
+    for (int i = 0; i < transactions.size(); ++i) {
+        const Transaction& t = transactions.at(i);
         std::cout << '[' << t.id << "] ";
         printDate(t.date);
         if (t.kind == TransactionKind::Income) {
@@ -218,6 +218,18 @@ bool readTransactionFields(const AppState& state, Transaction& t) {
         t.kind = TransactionKind::Income;
     } else {
         t.kind = TransactionKind::Expense;
+    }
+    if (state.wallets.size() == 0) {
+        std::cout << "Add a wallet first using option 1 (Type 1).\n";
+        return false;
+    }
+    if (kind == 1 && state.incomeSources.size() == 0) {
+        std::cout << "Add an income source first using option 1 (Type 2).\n";
+        return false;
+    }
+    if (kind == 2 && state.categories.size() == 0) {
+        std::cout << "Add an expense category first using option 1 (Type 3).\n";
+        return false;
     }
     if (!readInteger("Wallet ID: ", t.walletId)) {
         return false;
@@ -323,6 +335,176 @@ void rangeScreen(const AppState& state) {
               << " VND\nNet: " << summary.net << " VND\n";
 }
 
+// Each screen reads input and uses the existing Statistics functions.
+void walletReportScreen(const AppState& state) {
+    Date from, to;
+    if (!readDate("From (YYYY-MM-DD): ", from) ||
+        !readDate("To (YYYY-MM-DD): ", to)) {
+        return;
+    }
+    DynamicArray<WalletSummary> rows;
+    if (!summarizeByWallet(state, from, to, rows)) {
+        std::cout << "Start date must not be after end date.\n";
+        return;
+    }
+    std::cout << "\nIncome and expense by wallet\n";
+    if (rows.size() == 0) {
+        std::cout << "No wallets to report.\n";
+    }
+    for (int i = 0; i < rows.size(); i++) {
+        const WalletSummary& row = rows.at(i);
+        const Wallet* wallet = findWallet(state, row.walletId);
+        std::cout << "Wallet [" << row.walletId << "] ";
+        if (wallet != nullptr) {
+            std::cout << wallet->name;
+        } else {
+            std::cout << "[missing wallet]";
+        }
+        std::cout << " | Income: " << row.income << " VND"
+                  << " | Expense: " << row.expense << " VND\n";
+    }
+    MoneySummary total;
+    if (summarizeRange(state, from, to, total)) {
+        std::cout << "Total income: " << total.income << " VND\n"
+                  << "Total expense: " << total.expense << " VND\n";
+    }
+}
+
+void yearlyReportScreen(const AppState& state, int reportType) {
+    int yearCount;
+    if (!readInteger("How many years do you want to enter? ", yearCount)) {
+        return;
+    }
+    if (yearCount < 1 || yearCount > 9999) {
+        std::cout << "Enter a year count from 1 to 9999.\n";
+        return;
+    }
+
+    int* years = new int[yearCount];
+    int selectedCount = 0;
+    for (int i = 0; i < yearCount; i++) {
+        std::cout << "Year " << i + 1 << " of " << yearCount << "\n";
+        int year;
+        if (!readInteger("Year (1-9999): ", year)) {
+            delete[] years;
+            return;
+        }
+        if (year < 1 || year > 9999) {
+            std::cout << "Enter a year from 1 to 9999.\n";
+            delete[] years;
+            return;
+        }
+        bool repeated = false;
+        for (int j = 0; j < selectedCount; j++) {
+            if (years[j] == year) {
+                repeated = true;
+                break;
+            }
+        }
+        if (!repeated) {
+            years[selectedCount] = year;
+            selectedCount++;
+        }
+    }
+
+    std::cout << "Selected years:";
+    for (int i = 0; i < selectedCount; i++) {
+        std::cout << ' ' << years[i];
+    }
+    std::cout << '\n';
+    MoneySummary total;
+    if (!summarizeYears(state, years, selectedCount, total)) {
+        std::cout << "Could not calculate the selected years.\n";
+        delete[] years;
+        return;
+    }
+    if (reportType == 2) {
+        for (int i = 0; i < selectedCount; i++) {
+            MoneySummary row;
+            // The address of one array element supplies a one-year selection.
+            if (!summarizeYears(state, &years[i], 1, row)) {
+                std::cout << "Could not calculate the yearly summary.\n";
+                delete[] years;
+                return;
+            }
+            std::cout << "Year " << years[i]
+                      << " | Income: " << row.income << " VND"
+                      << " | Expense: " << row.expense << " VND"
+                      << " | Net: " << row.net << " VND\n";
+        }
+        std::cout << "Total income: " << total.income << " VND\n"
+                  << "Total expense: " << total.expense << " VND\n"
+                  << "Total net: " << total.net << " VND\n";
+    } else if (reportType == 3) {
+        DynamicArray<SourceTotal> rows;
+        if (!incomeBySource(state, years, selectedCount, rows)) {
+            std::cout << "Could not calculate income by source.\n";
+            delete[] years;
+            return;
+        }
+        if (rows.size() == 0) {
+            std::cout << "No income sources to report.\n";
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            const SourceTotal& row = rows.at(i);
+            const IncomeSource* source = findIncomeSource(state, row.sourceId);
+            std::cout << "Source [" << row.sourceId << "] ";
+            if (source != nullptr) {
+                std::cout << source->name;
+            } else {
+                std::cout << "[missing source]";
+            }
+            std::cout << " | Income: " << row.total << " VND\n";
+        }
+        std::cout << "Total income: " << total.income << " VND\n";
+    } else if (reportType == 4) {
+        DynamicArray<CategoryTotal> rows;
+        if (!expenseByCategory(state, years, selectedCount, rows)) {
+            std::cout << "Could not calculate expenses by category.\n";
+            delete[] years;
+            return;
+        }
+        if (rows.size() == 0) {
+            std::cout << "No expense categories to report.\n";
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            const CategoryTotal& row = rows.at(i);
+            const ExpenseCategory* category = findExpenseCategory(state, row.categoryId);
+            std::cout << "Category [" << row.categoryId << "] ";
+            if (category != nullptr) {
+                std::cout << category->name;
+            } else {
+                std::cout << "[missing category]";
+            }
+            std::cout << " | Expense: " << row.total << " VND\n";
+        }
+        std::cout << "Total expense: " << total.expense << " VND\n";
+    }
+    delete[] years;
+}
+
+void moreStatisticsScreen(const AppState& state) {
+    std::cout << "\n1. Income and expense by wallet\n"
+                 "2. Annual income, expense, and net\n"
+                 "3. Annual income by source\n"
+                 "4. Annual expense by category\n"
+                 "0. Return to Dashboard\n";
+    int choice;
+    if (!readInteger("Choose report: ", choice)) {
+        return;
+    }
+    if (choice == 0) {
+        return;
+    }
+    if (choice == 1) {
+        walletReportScreen(state);
+    } else if (choice >= 2 && choice <= 4) {
+        yearlyReportScreen(state, choice);
+    } else {
+        std::cout << "Unknown report.\n";
+    }
+}
+
 bool saveData(const AppState& state) {
     if (!saveState(state, DATA_PATH)) {
         std::cerr << "Save failed. Changes are only in memory. Check the data directory and retry.\n";
@@ -367,7 +549,8 @@ int main() {
         std::cout << "\n1. Manage wallets, sources, and categories\n"
                      "2. Date-range summary\n3. Add income or expense\n"
                      "4. Add monthly recurring rule\n5. List transactions\n"
-                     "6. List recurring rules\n7. List master data\n8. Retry save\n0. Save and exit\n";
+                     "6. List recurring rules\n7. List master data\n8. Retry save\n"
+                     "9. More statistics (wallet and yearly reports)\n0. Save and exit\n";
         int choice = -1;
         if (!readInteger("Choose: ", choice)) {
             if (!std::cin) {
@@ -408,6 +591,9 @@ int main() {
                 break;
             case 8:
                 saveData(state);
+                break;
+            case 9:
+                moreStatisticsScreen(state);
                 break;
             default:
                 std::cout << "Unknown option.\n";
