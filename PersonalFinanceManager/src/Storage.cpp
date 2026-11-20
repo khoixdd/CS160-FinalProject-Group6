@@ -79,6 +79,7 @@ bool readInt32(std::istream& in, std::int32_t& val) {
     if (raw <= static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
         val = static_cast<std::int32_t>(raw);
     else
+        // Avoid signed overflow UB when converting uint32_t back to int32_t
         val = -1 - static_cast<std::int32_t>(~raw);
 
     return true;
@@ -310,6 +311,14 @@ bool fitsString(const std::string& text) {
     return text.size() <= MAX_STRING_BYTES;
 }
 
+bool isDateAfter (const Date& a, const Date& b) {
+    if (a.year != b.year)
+        return a.year > b.year;
+    if (a.month != b.month)
+        return a.month > b.month;
+    return a.day > b.day;
+}
+
 template <typename T>
 bool tooManyRecords(const DynamicArray<T>& items) {
     return items.size() > static_cast<int>(MAX_RECORDS_PER_TYPE);
@@ -474,8 +483,8 @@ bool isStateConsistent(const AppState& state) {
     for (int i = 0; i < state.recurringRules.size(); ++i) {
         const RecurringRule& r = state.recurringRules.at(i);
         if (!isValidKind(static_cast<std::int32_t>(r.kind)) || !isValidDate(r.startDate)
-            || (r.hasEndDate && !isValidDate(r.endDate)) || r.amount <= 0
-            || !fitsString(r.description)) {
+            || (r.hasEndDate && (!isValidDate(r.endDate) || isDateAfter(r.startDate, r.endDate))) 
+            || r.amount <= 0 || !fitsString(r.description)) {
             return false;
         }
     }
