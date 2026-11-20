@@ -6,7 +6,7 @@
 #include "MasterData.h"
 #include "Recurring.h"
 #include "Storage.h"
-
+#include <climits>
 using namespace std;
 
 int main() {
@@ -690,6 +690,172 @@ int main() {
         cout << "Test 38 PASSED\n";
     }
 
-    cout << "ALL 38 TESTS PASSED\n";
+    // Test 39: Reject invalid and duplicate transaction IDs
+    {
+        AppState s;
+        int walletId = -1;
+        int sourceId = -1;
+        int id = -1;
+
+        if (!addWallet(s, "Cash", 100000, walletId) ||
+            !addIncomeSource(s, "Salary", sourceId)) {
+            cout << "Test 39 FAILED: setup\n";
+            return 1;
+        }
+
+        Transaction t;
+        t.date = {2026, 11, 20};
+        t.kind = TransactionKind::Income;
+        t.walletId = walletId;
+        t.referenceId = sourceId;
+        t.amount = 50000;
+        t.description = "Salary";
+
+        // Reject overflow
+        s.nextTransactionId = INT_MAX;
+
+        if (addTransaction(s, t, id) ||
+            s.transactions.size() != 0 ||
+            s.nextTransactionId != INT_MAX ||
+            id != -1) {
+            cout << "Test 39 FAILED: overflow\n";
+            return 1;
+        }
+
+        // Reject invalid counter
+        s.nextTransactionId = 0;
+
+        if (addTransaction(s, t, id) ||
+            s.transactions.size() != 0 ||
+            id != -1) {
+            cout << "Test 39 FAILED: invalid ID\n";
+            return 1;
+        }
+
+        // Add a valid transaction
+        s.nextTransactionId = 1;
+
+        if (!addTransaction(s, t, id) ||
+            id != 1 ||
+            s.nextTransactionId != 2) {
+            cout << "Test 39 FAILED: valid insertion\n";
+            return 1;
+        }
+
+        // Simulate a stale ID counter
+        s.nextTransactionId = 1;
+        int rejectedId = -1;
+
+        if (addTransaction(s, t, rejectedId) ||
+            s.transactions.size() != 1 ||
+            s.transactions.at(0).id != 1 ||
+            s.nextTransactionId != 1 ||
+            rejectedId != -1) {
+            cout << "Test 39 FAILED: duplicate ID\n";
+            return 1;
+        }
+
+        cout << "Test 39 PASSED\n";
+    }
+
+    // Test 40: Recurring transaction must match its rule
+    {
+        AppState s;
+
+        int walletId = -1;
+        int otherWalletId = -1;
+        int sourceId = -1;
+        int categoryId = -1;
+        int ruleId = -1;
+        int newId = -1;
+
+        if (!addWallet(s, "Cash", 100000, walletId) ||
+            !addWallet(s, "Bank", 50000, otherWalletId) ||
+            !addIncomeSource(s, "Salary", sourceId) ||
+            !addExpenseCategory(s, "Food", categoryId)) {
+            cout << "Test 40 FAILED: setup\n";
+            return 1;
+        }
+
+        RecurringRule rule;
+        rule.kind = TransactionKind::Income;
+        rule.walletId = walletId;
+        rule.referenceId = sourceId;
+        rule.amount = 250000;
+        rule.startDate = {2026, 11, 1};
+        rule.description = "Monthly salary";
+
+        if (!addRecurringRule(s, rule, ruleId)) {
+            cout << "Test 40 FAILED: rule\n";
+            return 1;
+        }
+
+        Transaction t;
+        t.date = {2026, 11, 1};
+        t.kind = TransactionKind::Income;
+        t.walletId = walletId;
+        t.referenceId = sourceId;
+        t.amount = 250000;
+        t.recurringRuleId = ruleId;
+        t.occurrenceYear = 2026;
+        t.occurrenceMonth = 11;
+
+        // Wrong transaction kind
+        t.kind = TransactionKind::Expense;
+        t.referenceId = categoryId;
+
+        if (addTransaction(s, t, newId)) {
+            cout << "Test 40 FAILED: wrong kind\n";
+            return 1;
+        }
+
+        t.kind = TransactionKind::Income;
+        t.referenceId = sourceId;
+
+        // Wrong wallet
+        t.walletId = otherWalletId;
+
+        if (addTransaction(s, t, newId)) {
+            cout << "Test 40 FAILED: wrong wallet\n";
+            return 1;
+        }
+
+        t.walletId = walletId;
+
+        // Wrong amount
+        t.amount = 1000;
+
+        if (addTransaction(s, t, newId)) {
+            cout << "Test 40 FAILED: wrong amount\n";
+            return 1;
+        }
+
+        t.amount = 250000;
+
+        // Occurrence month differs from transaction date
+        t.occurrenceMonth = 10;
+
+        if (addTransaction(s, t, newId) ||
+            s.transactions.size() != 0 ||
+            s.nextTransactionId != 1 ||
+            newId != -1) {
+            cout << "Test 40 FAILED: wrong month or state changed\n";
+            return 1;
+        }
+
+        // Normal generation must still succeed
+        int createdCount = -1;
+
+        if (!generateCurrentMonth(s, {2026, 11, 20}, createdCount) ||
+            createdCount != 1 ||
+            s.transactions.size() != 1) {
+            cout << "Test 40 FAILED: valid generation\n";
+            return 1;
+        }
+
+        cout << "Test 40 PASSED\n";
+    }
+
+    cout << "ALL 40 TESTS PASSED\n";
     return 0;
 }
