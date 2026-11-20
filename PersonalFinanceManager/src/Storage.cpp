@@ -1,4 +1,5 @@
 #include "../include/Storage.h"
+#include "../include/DateUtils.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -296,27 +297,8 @@ bool readRecords(std::istream& in, std::uint32_t count, DynamicArray<T>& arr,
     return true;
 }
 
-// Adding checks run before saving and after loading.
-bool isValidDate(const Date& d) {
-    if (d.year < 1 || d.year > 9999 || d.month < 1 || d.month > 12)
-        return false;
-
-    bool leap = (d.year % 400 == 0) || (d.year % 4 == 0 && d.year % 100 != 0);
-    const int DAYS[] = {31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-    return d.day >= 1 && d.day <= DAYS[d.month - 1];
-}
-
 bool fitsString(const std::string& text) {
     return text.size() <= MAX_STRING_BYTES;
-}
-
-bool isDateAfter (const Date& a, const Date& b) {
-    if (a.year != b.year)
-        return a.year > b.year;
-    if (a.month != b.month)
-        return a.month > b.month;
-    return a.day > b.day;
 }
 
 template <typename T>
@@ -483,7 +465,7 @@ bool isStateConsistent(const AppState& state) {
     for (int i = 0; i < state.recurringRules.size(); ++i) {
         const RecurringRule& r = state.recurringRules.at(i);
         if (!isValidKind(static_cast<std::int32_t>(r.kind)) || !isValidDate(r.startDate)
-            || (r.hasEndDate && (!isValidDate(r.endDate) || isDateAfter(r.startDate, r.endDate))) 
+            || (r.hasEndDate && (!isValidDate(r.endDate) || compareDates(r.startDate, r.endDate) > 0)) 
             || r.amount <= 0 || !fitsString(r.description)) {
             return false;
         }

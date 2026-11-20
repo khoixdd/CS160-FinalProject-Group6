@@ -830,6 +830,51 @@ std::string readFileBytes(const Path& path) {
     return {std::istreambuf_iterator<char>(file), {}};
 }
 
+void testWriteFailurePreservesExistFile () {
+    Path path = testDir() / "write_failure" / "finance.bin";
+    Path tmp = path.string() + ".tmp";
+
+    AppState good;
+    fillState(good);
+    bool ok = saveState(good, path.string());
+    assert(ok);
+    const std::string before = readFileBytes(path);
+
+    fs::create_directories(tmp); // a folder with name finance.bin.tmp
+    {
+        std::ofstream keep(tmp / "keep.txt");
+        keep << "python import ant";
+        ok = static_cast<bool>(keep);
+    }
+    assert(ok);
+
+    AppState changed = good;
+    changed.wallets.at(0).name = "NameNotReachFile";
+    ok = saveState(changed, path.string());
+    assert(!ok);
+
+    assert(readFileBytes(path) == before);
+    AppState reload;
+    LoadStatus status = loadState(reload, path.string());
+    assert(status == LoadStatus::Loaded);
+    assert(sameState(good, reload));
+
+    assert(fs::is_directory(tmp));
+    assert(fs::exists(tmp / "keep.txt"));
+
+    // Once the blocker is gone, saving works again
+    fs::remove_all(tmp);
+
+    ok = saveState(changed, path.string());
+    assert(ok);
+    assert(!fs::exists(tmp));
+
+    AppState after;
+    status = loadState(after, path.string());
+    assert(status == LoadStatus::Loaded);
+    assert(sameState(changed, after));
+}
+
 int main() {
     std::error_code ec;
     fs::remove_all(testDir(), ec);
@@ -894,6 +939,9 @@ int main() {
 
     testShortFileAndBadPaths();
     std::cout << "Short file and bad paths Test PASSED\n";
+
+    testWriteFailurePreservesExistFile();
+    std::cout << "Write failure preserves existing file Test PASSED\n";
 
     fs::remove_all(testDir(), ec);
 
