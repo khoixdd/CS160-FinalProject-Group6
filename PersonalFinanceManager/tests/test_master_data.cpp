@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <climits>
 #include "MasterData.h"
 using namespace std;
 
