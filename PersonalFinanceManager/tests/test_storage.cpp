@@ -1,3 +1,7 @@
+// #ifdef NDEBUG
+// #undef NDEBUG
+// #endif
+
 #include <cassert>
 #include <cstdint>
 #include <filesystem>
@@ -6,12 +10,20 @@
 #include <string>
 #include <system_error>
 #include <utility>
+#include <iterator>
 #include "../include/Storage.h"
+
+namespace fs = std::filesystem;
+using Path = fs::path;
 
 // Covers T23-T27
 
-std::filesystem::path testDir () {
-    return std::filesystem::temp_directory_path() / "pfm_w02_d01_storage_tests";
+Path testDir () {
+    Path curFile = __FILE__;
+    Path tar = curFile.parent_path().parent_path() / "data" / "pfm_w02_d01_storage_tests";
+    fs::create_directories(tar);
+
+    return tar;
 }
 
 bool sameDate (const Date& a, const Date& b) {
@@ -180,7 +192,7 @@ void fillState (AppState& state) {
     state.nextRecurringRuleId = 11;
 }
 
-void saveSample (const std::filesystem::path& path) {
+void saveSample (const Path& path) {
     AppState state;
     fillState(state);
 
@@ -188,14 +200,14 @@ void saveSample (const std::filesystem::path& path) {
     assert(ok);
 }
 
-bool copyFile (const std::filesystem::path& from, const std::filesystem::path& to) {
+bool copyFile (const Path& from, const Path& to) {
     std::error_code ec;
-    std::filesystem::copy_file(from, to, std::filesystem::copy_options::overwrite_existing, ec);
+    fs::copy_file(from, to, fs::copy_options::overwrite_existing, ec);
 
     return !ec;
 }
 
-bool writeByteAt (const std::filesystem::path& path, std::streamoff offset, unsigned char val) {
+bool writeByteAt (const Path& path, std::streamoff offset, unsigned char val) {
     std::fstream file(path, std::ios::binary | std::ios::in | std::ios::out);
     if (!file.is_open())
         return false;
@@ -207,7 +219,7 @@ bool writeByteAt (const std::filesystem::path& path, std::streamoff offset, unsi
     return static_cast<bool>(file);
 }
 
-bool writeUInt32At (const std::filesystem::path& path, std::streamoff offset, std::uint32_t val) {
+bool writeUInt32At (const Path& path, std::streamoff offset, std::uint32_t val) {
     std::fstream file(path, std::ios::binary | std::ios::in | std::ios::out);
     if (!file.is_open())
         return false;
@@ -223,13 +235,13 @@ bool writeUInt32At (const std::filesystem::path& path, std::streamoff offset, st
 
 // T23 and T24
 void testRoundTrip () {
-    std::filesystem::path path = testDir() / "round_trip" / "finance.bin";
+    Path path = testDir() / "round_trip" / "finance.bin";
 
     AppState original;
     fillState(original);
     bool ok = saveState(original, path.string());
     assert(ok);
-    assert(!std::filesystem::exists(path.string() + ".tmp"));
+    assert(!fs::exists(path.string() + ".tmp"));
 
     // magic "PFM1"
     std::ifstream in(path, std::ios::binary);
@@ -248,7 +260,7 @@ void testRoundTrip () {
 
 // T23 edge case
 void testEmptyState () {
-    std::filesystem::path path = testDir() / "empty.bin";
+    Path path = testDir() / "empty.bin";
 
     AppState original;
     AppState loaded;
@@ -271,16 +283,16 @@ void testMissingFile () {
 
 // T26 truncated data
 void testTruncatedFile () {
-    std::filesystem::path good = testDir() / "good.bin";
-    std::filesystem::path bad = testDir() / "truncated.bin";
+    Path good = testDir() / "good.bin";
+    Path bad = testDir() / "truncated.bin";
 
     saveSample(good);
     bool ok = copyFile(good, bad);
     assert(ok);
 
-    std::uintmax_t fileSize = std::filesystem::file_size(bad);
+    std::uintmax_t fileSize = fs::file_size(bad);
     assert(fileSize > storage_v1::HEADER_BYTES);
-    std::filesystem::resize_file(bad, fileSize - 1);
+    fs::resize_file(bad, fileSize - 1);
 
     AppState dest;
     Wallet sentinel;
@@ -297,9 +309,9 @@ void testTruncatedFile () {
 
 // T26 invalid magic 
 void testBadMagicAndVersion () {
-    std::filesystem::path good = testDir() / "valid_for_header_tests.bin";
-    std::filesystem::path badMagic = testDir() / "bad_magic.bin";
-    std::filesystem::path badVersion = testDir() / "bad_version.bin";
+    Path good = testDir() / "valid_for_header_tests.bin";
+    Path badMagic = testDir() / "bad_magic.bin";
+    Path badVersion = testDir() / "bad_version.bin";
 
     saveSample(good);
 
@@ -324,8 +336,8 @@ void testBadMagicAndVersion () {
 
 // T26: extra bytes after the last record -> InvalidFile
 void testTrailingBytes () {
-    std::filesystem::path good = testDir() / "valid_for_trailing_test.dat";
-    std::filesystem::path bad = testDir() / "trailing_bytes.dat";
+    Path good = testDir() / "valid_for_trailing_test.dat";
+    Path bad = testDir() / "trailing_bytes.dat";
 
     saveSample(good);
     bool ok = copyFile(good, bad);
@@ -343,11 +355,7 @@ void testTrailingBytes () {
 
 // T23 file layout: the _MIN_BYTES const must equal the real 
 // size of a record has empty strings
-void testMinimumRecordSizes () {
-    std::filesystem::path path = testDir() / "minimum_sizes.bin";
-
-    AppState state;
-
+void fillMinimumState (AppState &state) {
     Wallet w;
     w.id = 1;
     state.wallets.pushBack(w);
@@ -379,8 +387,8 @@ void testMinimumRecordSizes () {
     r.walletId = 1;
     r.amount = 1;
     r.startDate = {2026, 1, 1};
-    r.hasEndDate = false;
-    r.endDate = {0, 0, 0};
+    r.hasEndDate = true;
+    r.endDate = {2026, 2, 1};
     state.recurringRules.pushBack(r);
 
     state.nextWalletId = 2;
@@ -388,12 +396,19 @@ void testMinimumRecordSizes () {
     state.nextSourceId = 2;
     state.nextTransactionId = 2;
     state.nextRecurringRuleId = 2;
+}
+
+void testMinimumRecordSizes () {
+    Path path = testDir() / "minimum_sizes.bin";
+
+    AppState state;
+    fillMinimumState(state);
 
     bool ok = saveState(state, path.string());
     assert(ok);
 
     // 48 header + 16 wallet + 8 category + 8 source + 52 transaction + 53 rule
-    std::uintmax_t size = std::filesystem::file_size(path);
+    std::uintmax_t size = fs::file_size(path);
     assert(size == 185);
     assert(size == storage_v1::HEADER_BYTES + storage_v1::WALLET_MIN_BYTES
                        + storage_v1::CATEGORY_MIN_BYTES + storage_v1::SOURCE_MIN_BYTES
@@ -402,9 +417,9 @@ void testMinimumRecordSizes () {
 
 // T26: impossible record count (above the limit/more records than file capacity)
 void testImpossibleCounts () {
-    std::filesystem::path good = testDir() / "valid_for_count_tests.dat";
-    std::filesystem::path aboveLimit = testDir() / "count_above_limit.dat";
-    std::filesystem::path tooBig = testDir() / "count_larger_than_file.dat";
+    Path good = testDir() / "valid_for_count_tests.dat";
+    Path aboveLimit = testDir() / "count_above_limit.dat";
+    Path tooBig = testDir() / "count_larger_than_file.dat";
 
     saveSample(good);
 
@@ -430,7 +445,7 @@ void testImpossibleCounts () {
 
 // T26: string length above the limit
 void testBadStringLength () {
-    std::filesystem::path path = testDir() / "bad_string_length.bin";
+    Path path = testDir() / "bad_string_length.bin";
 
     saveSample(path);
 
@@ -446,7 +461,7 @@ void testBadStringLength () {
 
 // T27: save fails (string too long)
 void testOversizedStringNotSaved () {
-    std::filesystem::path path = testDir() / "preserve_good_file.bin";
+    Path path = testDir() / "preserve_good_file.bin";
 
     AppState valid;
     fillState(valid);
@@ -472,7 +487,7 @@ void testOversizedStringNotSaved () {
 
 // T23, T24: a second save replaces the first, and a reload returns the newest data
 void testOverwriteExistingFile () {
-    std::filesystem::path path = testDir() / "overwrite.bin";
+    Path path = testDir() / "overwrite.bin";
 
     AppState first;
     fillState(first);
@@ -493,7 +508,7 @@ void testOverwriteExistingFile () {
 // T26 and T27 helpers: saveState refuses data that loadState would reject,
 // so a file that cannot be read back is never written
 void testInvalidKindAndDate () {
-    std::filesystem::path path = testDir() / "invalid_state.dat";
+    Path path = testDir() / "invalid_state.dat";
 
     AppState badKind;
     fillState(badKind);
@@ -507,12 +522,12 @@ void testInvalidKindAndDate () {
     ok = saveState(badDate, path.string());
     assert(!ok);
 
-    assert(!std::filesystem::exists(path));
+    assert(!fs::exists(path));
 }
 
 // T27: destination written fail
 void testUnwritableDestination () {
-    std::filesystem::path blocker = testDir() / "blocker";
+    Path blocker = testDir() / "blocker";
 
     // A regular file where the data folder should be
     std::ofstream out(blocker);
@@ -523,15 +538,15 @@ void testUnwritableDestination () {
     fillState(state);
     bool ok = saveState(state, (blocker / "finance.bin").string());
     assert(!ok);
-    assert(std::filesystem::is_regular_file(blocker));
+    assert(fs::is_regular_file(blocker));
 }
 
 // T27: destination cannot be replaced -> returns false, nothing is moved or deleted
 void testDirectoryAsTarget () {
-    std::filesystem::path target = testDir() / "dir_target" / "finance.dat";
+    Path target = testDir() / "dir_target" / "finance.dat";
 
     // finance.dat is a directory that already holds a file
-    std::filesystem::create_directories(target);
+    fs::create_directories(target);
     std::ofstream out(target / "keep.txt");
     out << "important";
     out.close();
@@ -542,16 +557,328 @@ void testDirectoryAsTarget () {
     assert(!ok);
 
     // Nothing was moved or replaced
-    assert(std::filesystem::is_directory(target));
-    assert(std::filesystem::exists(target / "keep.txt"));
-    assert(!std::filesystem::exists(target.string() + ".bak"));
-    assert(!std::filesystem::exists(target.string() + ".tmp"));
+    assert(fs::is_directory(target));
+    assert(fs::exists(target / "keep.txt"));
+    assert(!fs::exists(target.string() + ".bak"));
+    assert(!fs::exists(target.string() + ".tmp"));
+}
+
+// T23 and T24: IDs of deleted records are never reused after save + reload
+void testDeletedIdsNotReused () {
+    Path path = testDir() / "ids_after_erase.bin";
+
+    AppState state;
+    fillState(state);
+    assert(state.transactions.eraseAt(1)); // remove transaction 2, counter stays 4
+    assert(saveState(state, path.string()));
+
+    AppState loaded;
+    assert(loadState(loaded, path.string()) == LoadStatus::Loaded);
+    assert(loaded.transactions.size() == 2);
+    assert(loaded.transactions.at(0).id == 1 && loaded.transactions.at(1).id == 3);
+    assert(loaded.nextTransactionId == 4);
+
+    // A counter that would hand out an existing ID must be refused on save
+    loaded.nextTransactionId = 3;
+    assert(!saveState(loaded, (testDir() / "bad_counter.bin").string()));
+}
+
+// T26: records that point to IDs that do not exist are refused (save and load)
+void testDanglingReferencesRejected () {
+    Path path = testDir() / "dangling.bin";
+
+    AppState badWallet;
+    fillState(badWallet);
+    badWallet.transactions.at(0).walletId = 77;
+    assert(!saveState(badWallet, path.string()));
+
+    AppState badSource;
+    fillState(badSource);
+    badSource.transactions.at(0).referenceId = 88; // income -> unknown source
+    assert(!saveState(badSource, path.string()));
+
+    AppState badRuleRef;
+    fillState(badRuleRef);
+    badRuleRef.recurringRules.at(0).walletId = 77;
+    assert(!saveState(badRuleRef, path.string()));
+
+    AppState orphanRule;
+    fillState(orphanRule);
+    orphanRule.transactions.at(2).recurringRuleId = 55; // rule 55 does not exist
+    assert(!saveState(orphanRule, path.string()));
+
+    AppState badMonth;
+    fillState(badMonth);
+    badMonth.transactions.at(2).occurrenceMonth = 99;
+    assert(!saveState(badMonth, path.string()));
+
+    AppState manualWithCycle;
+    fillState(manualWithCycle);
+    manualWithCycle.transactions.at(0).occurrenceMonth = 11; 
+    assert(!saveState(manualWithCycle, path.string()));
+
+    assert(!fs::exists(path));
+}
+
+// T20 and T26: the same (rule, year, month) may not exist twice in a file
+void testDuplicateCycleRejected () {
+    Path path = testDir() / "duplicate_cycle.bin";
+
+    AppState state;
+    fillState(state);
+    Transaction dup = state.transactions.at(2);
+    dup.id = 4;
+    assert(state.transactions.pushBack(dup));
+    state.nextTransactionId = 5;
+    assert(!saveState(state, path.string()));
+    assert(!fs::exists(path));
+}
+
+void testCorruptValuesRejectedOnLoad () {
+    AppState state, cor_state;
+    LoadStatus status;
+    bool ok;
+
+    fillMinimumState(state);
+
+    // --- Counter lower than used ID
+    Path path = testDir() / "corrupted_id_counter.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 8, 1);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Wallet ID is zero
+    path = testDir() / "corrupted_wallet_id.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 48, 0);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Transaction ID is zero
+    path = testDir() / "corrupted_transaction_id.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 80, 0);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Invalid month
+    path = testDir() / "corrupted_month.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 88, 13);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Invalid transaction kind
+    path = testDir() / "corrupted_transaction_kind.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 96, 3);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Source reference ID does not exist
+    path = testDir() / "corrupted_src_ref_id.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 100, 99);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Wallet reference ID does not exist
+    path = testDir() / "corrupted_wallet_ref_id.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 104, 99);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Transaction amount is zero
+    path = testDir() / "corrupted_transaction_amount.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 108, 0);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Manual transaction (recurringRuleId = 0) has a nonzero occurrence year
+    path = testDir() / "corrupted_manual_occurrence.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 124, 99);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Orphan recurringRuleId (the referenced rule does not exist)
+    path = testDir() / "corrupted_orphan_rule_id.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 120, 99);
+    assert(ok);
+    ok = writeUInt32At(path, 124, 2026);
+    assert(ok);
+    ok = writeUInt32At(path, 128, 1);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Invalid boolean value
+    path = testDir() / "corrupted_bool_val.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    // The boolean value at RecurringRule::hasEndDate
+    ok = writeByteAt(path, 172, 2);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // --- Rule end date is before start date
+    path = testDir() / "corrupted_rule_date.bin";
+    ok = saveState(state, path.string());
+    assert(ok);
+
+    ok = writeUInt32At(path, 173, 2025);
+    assert(ok);
+
+    status = loadState(cor_state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+}
+
+void testShortFileAndBadPaths () {
+    AppState state;
+    bool ok;
+    LoadStatus status;
+
+    // File shorter than 48 bytes
+    Path path = testDir() / "short_data.bin";
+    {
+        std::ofstream out(path, std::ios::binary);
+        out.write("PFM1", 4);
+        ok = static_cast<bool>(out);
+    }
+    assert(ok);
+
+    status = loadState(state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // File completely empty
+    path = testDir() / "zero_data.bin";
+    {
+        std::ofstream out(path, std::ios::binary);
+        ok = out.is_open();
+    }
+    assert(ok);
+
+    status = loadState(state, path.string());
+    assert(status == LoadStatus::InvalidFile);
+
+    // Empty path
+    status = loadState(state, "");
+    assert(status == LoadStatus::IOError);
+
+    AppState goodState;
+    fillMinimumState(goodState);
+    ok = saveState(goodState, "");
+    assert(!ok);
+
+    // Path points to a folder, not a file
+    path = testDir() / "folder_dir";
+    fs::create_directories(path);
+    status = loadState(state, path.string());
+    assert(status == LoadStatus::IOError);
+}
+
+
+// Read all binary file into a string
+std::string readFileBytes(const Path& path) {
+    std::ifstream file(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(file), {}};
+}
+
+void testWriteFailurePreservesExistFile () {
+    Path path = testDir() / "write_failure" / "finance.bin";
+    Path tmp = path.string() + ".tmp";
+
+    AppState good;
+    fillState(good);
+    bool ok = saveState(good, path.string());
+    assert(ok);
+    const std::string before = readFileBytes(path);
+
+    fs::create_directories(tmp); // a folder with name finance.bin.tmp
+    {
+        std::ofstream keep(tmp / "keep.txt");
+        keep << "python import ant";
+        ok = static_cast<bool>(keep);
+    }
+    assert(ok);
+
+    AppState changed = good;
+    changed.wallets.at(0).name = "NameNotReachFile";
+    ok = saveState(changed, path.string());
+    assert(!ok);
+
+    assert(readFileBytes(path) == before);
+    AppState reload;
+    LoadStatus status = loadState(reload, path.string());
+    assert(status == LoadStatus::Loaded);
+    assert(sameState(good, reload));
+
+    assert(fs::is_directory(tmp));
+    assert(fs::exists(tmp / "keep.txt"));
+
+    // Once the blocker is gone, saving works again
+    fs::remove_all(tmp);
+
+    ok = saveState(changed, path.string());
+    assert(ok);
+    assert(!fs::exists(tmp));
+
+    AppState after;
+    status = loadState(after, path.string());
+    assert(status == LoadStatus::Loaded);
+    assert(sameState(changed, after));
 }
 
 int main() {
     std::error_code ec;
-    std::filesystem::remove_all(testDir(), ec);
-    std::filesystem::create_directories(testDir(), ec);
+    fs::remove_all(testDir(), ec);
+    fs::create_directories(testDir(), ec);
     assert(!ec);
 
     std::cout << "Starting test storage\n\n";
@@ -598,8 +925,25 @@ int main() {
     testDirectoryAsTarget();
     std::cout << "Directory as target Test PASSED\n";
 
+    testDeletedIdsNotReused();
+    std::cout << "Deleted IDs not reused Test PASSED\n";
 
-    std::filesystem::remove_all(testDir(), ec);
+    testDanglingReferencesRejected();
+    std::cout << "Dangling references rejected Test PASSED\n";
+
+    testDuplicateCycleRejected();
+    std::cout << "Duplicate recurring cycle rejected Test PASSED\n";
+
+    testCorruptValuesRejectedOnLoad();
+    std::cout << "Corrupt values rejected on load Test PASSED\n";
+
+    testShortFileAndBadPaths();
+    std::cout << "Short file and bad paths Test PASSED\n";
+
+    testWriteFailurePreservesExistFile();
+    std::cout << "Write failure preserves existing file Test PASSED\n";
+
+    fs::remove_all(testDir(), ec);
 
     std::cout << "\n\n";
     std::cout << "All tests passed\n";

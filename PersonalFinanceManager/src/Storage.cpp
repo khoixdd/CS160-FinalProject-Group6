@@ -1,4 +1,5 @@
 #include "../include/Storage.h"
+#include "../include/DateUtils.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -79,6 +80,7 @@ bool readInt32(std::istream& in, std::int32_t& val) {
     if (raw <= static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
         val = static_cast<std::int32_t>(raw);
     else
+        // Avoid signed overflow UB when converting uint32_t back to int32_t
         val = -1 - static_cast<std::int32_t>(~raw);
 
     return true;
@@ -295,17 +297,6 @@ bool readRecords(std::istream& in, std::uint32_t count, DynamicArray<T>& arr,
     return true;
 }
 
-// Adding checks run before saving and after loading.
-bool isValidDate(const Date& d) {
-    if (d.year < 1 || d.year > 9999 || d.month < 1 || d.month > 12)
-        return false;
-
-    bool leap = (d.year % 400 == 0) || (d.year % 4 == 0 && d.year % 100 != 0);
-    const int DAYS[] = {31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-
-    return d.day >= 1 && d.day <= DAYS[d.month - 1];
-}
-
 bool fitsString(const std::string& text) {
     return text.size() <= MAX_STRING_BYTES;
 }
@@ -474,8 +465,8 @@ bool isStateConsistent(const AppState& state) {
     for (int i = 0; i < state.recurringRules.size(); ++i) {
         const RecurringRule& r = state.recurringRules.at(i);
         if (!isValidKind(static_cast<std::int32_t>(r.kind)) || !isValidDate(r.startDate)
-            || (r.hasEndDate && !isValidDate(r.endDate)) || r.amount <= 0
-            || !fitsString(r.description)) {
+            || (r.hasEndDate && (!isValidDate(r.endDate) || compareDates(r.startDate, r.endDate) > 0)) 
+            || r.amount <= 0 || !fitsString(r.description)) {
             return false;
         }
     }
