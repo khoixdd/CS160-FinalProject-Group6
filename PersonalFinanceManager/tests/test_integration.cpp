@@ -16,6 +16,51 @@ int failTest(const std::string& message, const std::string& testFile) {
     return 1;
 }
 
+// Expected values come from the five sample transactions below.
+bool checkAllReports(const AppState& state, int cash, int bank,
+                     int salary, int gift, int food, int transport) {
+    DynamicArray<WalletSummary> wallets;
+    if (!summarizeByWallet(state, {2025, 12, 31}, {2026, 1, 2}, wallets) ||
+        wallets.size() != 2) {
+        std::cout << "FAIL: Expected two wallet report rows\n";
+        return false;
+    }
+    if (wallets.at(0).walletId != cash || wallets.at(0).income != 1000 ||
+        wallets.at(0).expense != 350 || wallets.at(1).walletId != bank ||
+        wallets.at(1).income != 500 || wallets.at(1).expense != 70) {
+        std::cout << "FAIL: Wallet report totals are incorrect\n";
+        return false;
+    }
+    int years[] = {2025, 2026, 2026};
+    MoneySummary total;
+    if (!summarizeYears(state, years, 3, total) || total.income != 1500 ||
+        total.expense != 420 || total.net != 1080) {
+        std::cout << "FAIL: Annual summary should count repeated years once\n";
+        return false;
+    }
+    DynamicArray<SourceTotal> sources;
+    if (!incomeBySource(state, years, 3, sources) || sources.size() != 2 ||
+        sources.at(0).sourceId != salary || sources.at(0).total != 1000 ||
+        sources.at(1).sourceId != gift || sources.at(1).total != 500) {
+        std::cout << "FAIL: Income report should show Salary 1000 and Gift 500\n";
+        return false;
+    }
+    DynamicArray<CategoryTotal> categories;
+    if (!expenseByCategory(state, years, 3, categories) || categories.size() != 2 ||
+        categories.at(0).categoryId != food || categories.at(0).total != 350 ||
+        categories.at(1).categoryId != transport || categories.at(1).total != 70) {
+        std::cout << "FAIL: Expense report should show Food 350 and Transport 70\n";
+        return false;
+    }
+    int emptyYear = 2024;
+    if (!summarizeYears(state, &emptyYear, 1, total) || total.income != 0 ||
+        total.expense != 0 || total.net != 0) {
+        std::cout << "FAIL: A year without transactions should have zero totals\n";
+        return false;
+    }
+    return true;
+}
+
 int main() {
     // Run from PersonalFinanceManager/. Never use data/finance.bin for tests.
     const std::string testFile = "build/integration_test.bin";
@@ -35,17 +80,19 @@ int main() {
     }
     std::cout << "Test 1 passed: empty application\n";
 
-    int cash, bank, source, category, id;
+    int cash, bank, source, gift, category, transport, id;
     if (!addWallet(state, "Cash", 100, cash) ||
         !addWallet(state, "Bank", 50, bank) ||
         !addIncomeSource(state, "Salary", source) ||
-        !addExpenseCategory(state, "Food", category)) {
+        !addIncomeSource(state, "Gift", gift) ||
+        !addExpenseCategory(state, "Food", category) ||
+        !addExpenseCategory(state, "Transport", transport)) {
         return failTest("Could not create master data", testFile);
     }
     if (!addIncome(state, {2025, 12, 31}, 1000, cash, source, "Salary", id) ||
         !addExpense(state, {2025, 12, 31}, 200, cash, category, "Dinner", id) ||
-        !addIncome(state, {2026, 1, 1}, 500, bank, source, "Gift", id) ||
-        !addExpense(state, {2026, 1, 1}, 70, bank, category, "Travel", id) ||
+        !addIncome(state, {2026, 1, 1}, 500, bank, gift, "Gift", id) ||
+        !addExpense(state, {2026, 1, 1}, 70, bank, transport, "Travel", id) ||
         !addExpense(state, {2026, 1, 2}, 150, cash, category, "Lunch", id)) {
         return failTest("Could not record the five transactions", testFile);
     }
@@ -67,6 +114,24 @@ int main() {
     }
     showDashboard(state);
     std::cout << "Test 4 passed: Dashboard balances\n";
+
+    if (!checkAllReports(state, cash, bank, source, gift, category, transport)) {
+        return failTest("Full report integration failed", testFile);
+    }
+    if (listTransactions(state).size() != 5) {
+        return failTest("Transaction listing should contain all five records", testFile);
+    }
+    std::cout << "Test 5 passed: wallet, year, source, and category reports\n";
+
+    if (!saveState(state, testFile)) {
+        return failTest("Could not save the report example", testFile);
+    }
+    AppState reportData;
+    if (loadState(reportData, testFile) != LoadStatus::Loaded ||
+        !checkAllReports(reportData, cash, bank, source, gift, category, transport)) {
+        return failTest("Report values changed after loading", testFile);
+    }
+    std::cout << "Test 6 passed: report values survive save/load\n";
 
     RecurringRule rule;
     rule.walletId = cash;
@@ -93,7 +158,7 @@ int main() {
         calculateTotalBalance(loaded) != 1530) {
         return failTest("Records, counter, or balances changed after loading", testFile);
     }
-    std::cout << "Test 5 passed: recurring transaction survives save/load\n";
+    std::cout << "Test 7 passed: recurring transaction survives save/load\n";
 
     if (!generateCurrentMonth(loaded, {2026, 2, 28}, count) || count != 0) {
         return failTest("Same-month restart must not add a duplicate", testFile);
@@ -109,7 +174,7 @@ int main() {
         restarted.transactions.size() != 7 || calculateTotalBalance(restarted) != 1830) {
         return failTest("March transaction was not preserved", testFile);
     }
-    std::cout << "Test 6 passed: no duplicates and correct next-month balance\n";
+    std::cout << "Test 8 passed: no duplicates and correct next-month balance\n";
 
     Date date{2000, 1, 1};
     if (parseDate("2026-02-30", date) || date.year != 2000) {
@@ -118,7 +183,7 @@ int main() {
     if (!parseDate("2028-02-29", date)) {
         return failTest("Leap day should be accepted", testFile);
     }
-    std::cout << "Test 7 passed: date input\n";
+    std::cout << "Test 9 passed: date input\n";
 
     if (std::remove(testFile.c_str()) != 0) {
         std::cout << "FAIL: Could not remove the test file\n";

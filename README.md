@@ -26,12 +26,14 @@ pfm.exe
 
 Enter the number of a menu option and press Enter.
 
+For your first run, follow the worked example and menu instructions in the [User Guide](USER_GUIDE.md).
+
 1. Choose **1** to add a wallet, an income source, and an expense category. Choose **7** to see their IDs.
 2. Choose **3** to record income or an expense using those IDs. Enter dates as `YYYY-MM-DD` and amounts as positive whole VND.
-3. Choose **5** to view transactions or **2** for a date-range summary. The Dashboard shows wallet balances.
+3. Choose **5** to view transactions, **2** for a date-range summary, or **9** for wallet and yearly reports. The Dashboard shows wallet balances.
 4. Choose **4** to add a monthly rule; its start date is required and its end date can be blank. Due entries are added when you next open the application. Choose **6** to view rules.
 5. Choose **0** to save and exit.
 
 Data saves automatically to `data/finance.bin` inside `PersonalFinanceManager/`. Always run the application from that folder. If saving fails, check the folder and use **8** to retry. If loading fails, restore a valid backup before using the application again.
 
-The application is still in development. Wallet and annual Statistics reports are not available yet.
+For yearly reports, enter the number of years, then each year on its own line. Repeated years are counted once.
