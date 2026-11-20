@@ -561,7 +561,156 @@ int main() {
         }
         cout << "Test 38 PASSED\n";
     }
+    // Test 39: Reject invalid and duplicate wallet IDs
+    {
+        AppState s;
+        int id = -1;
 
-    cout << "ALL 38 TESTS PASSED\n";
+        // Prevent integer overflow.
+        s.nextWalletId = INT_MAX;
+
+        if (addWallet(s, "Overflow", 100, id) ||
+            s.wallets.size() != 0 ||
+            s.nextWalletId != INT_MAX ||
+            id != -1) {
+            cout << "Test 39 FAILED: overflow\n";
+            return 1;
+        }
+
+        // Reject a non-positive counter.
+        s.nextWalletId = 0;
+
+        if (addWallet(s, "Invalid", 100, id) ||
+            s.wallets.size() != 0 ||
+            id != -1) {
+            cout << "Test 39 FAILED: invalid ID\n";
+            return 1;
+        }
+
+        // Create a valid wallet.
+        s.nextWalletId = 1;
+
+        if (!addWallet(s, "Cash", 100, id) || id != 1) {
+            cout << "Test 39 FAILED: setup\n";
+            return 1;
+        }
+
+        // Simulate a stale counter.
+        s.nextWalletId = 1;
+        int rejectedId = -1;
+
+        if (addWallet(s, "Duplicate", 200, rejectedId) ||
+            s.wallets.size() != 1 ||
+            s.wallets.at(0).name != "Cash" ||
+            rejectedId != -1) {
+            cout << "Test 39 FAILED: duplicate ID\n";
+            return 1;
+        }
+
+        cout << "Test 39 PASSED\n";
+    }
+
+    // Test 40: Reject invalid and duplicate IncomeSource IDs
+    {
+        AppState s;
+        int id = -1;
+
+        // Prevent integer overflow
+        s.nextSourceId = INT_MAX;
+
+        if (addIncomeSource(s, "Overflow", id) ||
+            s.incomeSources.size() != 0 ||
+            s.nextSourceId != INT_MAX ||
+            id != -1) {
+            cout << "Test 40 FAILED: overflow\n";
+            return 1;
+        }
+
+        // Reject non-positive ID
+        s.nextSourceId = 0;
+
+        if (addIncomeSource(s, "Invalid", id) ||
+            s.incomeSources.size() != 0 ||
+            id != -1) {
+            cout << "Test 40 FAILED: invalid ID\n";
+            return 1;
+        }
+
+        // Create a valid IncomeSource
+        s.nextSourceId = 1;
+
+        if (!addIncomeSource(s, "Salary", id) ||
+            id != 1) {
+            cout << "Test 40 FAILED: setup\n";
+            return 1;
+        }
+
+        // Reject duplicate ID
+        s.nextSourceId = 1;
+        int rejectedId = -1;
+
+        if (addIncomeSource(s, "Bonus", rejectedId) ||
+            s.incomeSources.size() != 1 ||
+            s.incomeSources.at(0).name != "Salary" ||
+            rejectedId != -1) {
+            cout << "Test 40 FAILED: duplicate ID\n";
+            return 1;
+        }
+
+        cout << "Test 40 PASSED\n";
+    }
+
+    // Test 41: Reject invalid and duplicate ExpenseCategory IDs
+    {
+        AppState s;
+        int id = -1;
+
+        // Reject integer overflow
+        s.nextCategoryId = INT_MAX;
+
+        if (addExpenseCategory(s, "Overflow", id) ||
+            s.categories.size() != 0 ||
+            s.nextCategoryId != INT_MAX ||
+            id != -1) {
+            cout << "Test 41 FAILED: overflow\n";
+            return 1;
+        }
+
+        // Reject non-positive ID
+        s.nextCategoryId = 0;
+
+        if (addExpenseCategory(s, "Invalid", id) ||
+            s.categories.size() != 0 ||
+            id != -1) {
+            cout << "Test 41 FAILED: invalid ID\n";
+            return 1;
+        }
+
+        // Create a valid category
+        s.nextCategoryId = 1;
+
+        if (!addExpenseCategory(s, "Food", id) ||
+            id != 1 ||
+            s.categories.size() != 1) {
+            cout << "Test 41 FAILED: setup\n";
+            return 1;
+        }
+
+        // Reject a duplicate ID
+        s.nextCategoryId = 1;
+        int rejectedId = -1;
+
+        if (addExpenseCategory(s, "Transport", rejectedId) ||
+            s.categories.size() != 1 ||
+            s.categories.at(0).name != "Food" ||
+            rejectedId != -1) {
+            cout << "Test 41 FAILED: duplicate ID\n";
+            return 1;
+        }
+
+        cout << "Test 41 PASSED\n";
+    }
+
+    cout << "ALL 41 TESTS PASSED\n";
     return 0;
 }

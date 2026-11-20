@@ -1,8 +1,18 @@
 #include "MasterData.h"
+#include <climits>
+
 
 bool addWallet(AppState& state, const std::string& name,
                std::int64_t openingBalance, int& outId) {
-    if (name.empty()) {
+    // Reject invalid names and ID counters.
+    if (name.empty() ||
+        state.nextWalletId <= 0 ||
+        state.nextWalletId == INT_MAX) {
+        return false;
+    }
+
+    // Never reuse an existing wallet ID.
+    if (findWallet(state, state.nextWalletId) != nullptr) {
         return false;
     }
 
@@ -15,11 +25,12 @@ bool addWallet(AppState& state, const std::string& name,
         return false;
     }
 
-    outId = state.nextWalletId;
+    outId = wallet.id;
     state.nextWalletId++;
 
     return true;
 }
+
 
 const Wallet* findWallet(const AppState& state, int id) {
     for (int i = 0; i < state.wallets.size(); i++) {
@@ -31,10 +42,17 @@ const Wallet* findWallet(const AppState& state, int id) {
     return nullptr;
 }
 
+
 bool addIncomeSource(AppState& state,
                      const std::string& name,
                      int& outId) {
-    if (name.empty()) {
+    if (name.empty() ||
+        state.nextSourceId <= 0 ||
+        state.nextSourceId == INT_MAX) {
+        return false;
+    }
+
+    if (findIncomeSource(state, state.nextSourceId) != nullptr) {
         return false;
     }
 
@@ -52,6 +70,7 @@ bool addIncomeSource(AppState& state,
     return true;
 }
 
+
 const IncomeSource* findIncomeSource(
     const AppState& state, int id) {
 
@@ -64,10 +83,18 @@ const IncomeSource* findIncomeSource(
     return nullptr;
 }
 
+
 bool addExpenseCategory(AppState& state,
                         const std::string& name,
                         int& outId) {
-    if (name.empty()) {
+    if (name.empty() ||
+        state.nextCategoryId <= 0 ||
+        state.nextCategoryId == INT_MAX) {
+        return false;
+    }
+
+    // Prevent duplicate IDs
+    if (findExpenseCategory(state, state.nextCategoryId) != nullptr) {
         return false;
     }
 
@@ -84,6 +111,7 @@ bool addExpenseCategory(AppState& state,
 
     return true;
 }
+
 
 const ExpenseCategory* findExpenseCategory(
     const AppState& state, int id) {

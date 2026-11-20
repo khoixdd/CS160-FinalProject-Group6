@@ -1,10 +1,21 @@
 #include "Transactions.h"
 #include "MasterData.h"
 #include "DateUtils.h"
-
+#include <climits>
 bool addTransaction(AppState& state,
                     const Transaction& input,
                     int& outId) {
+
+    // Reject invalid or overflowing ID counters
+    if (state.nextTransactionId <= 0 ||
+        state.nextTransactionId == INT_MAX) {
+        return false;
+    }
+
+    // Prevent duplicate transaction IDs
+    if (findTransaction(state, state.nextTransactionId) != nullptr) {
+        return false;
+    }
 
     // Check date, amount and kind
     if (!isValidDate(input.date)) return false;
@@ -42,16 +53,26 @@ bool addTransaction(AppState& state,
     else {
         if (input.recurringRuleId < 0) return false;
 
-        bool foundRule = false;
+        const RecurringRule* rule = nullptr;
 
         for (int i = 0; i < state.recurringRules.size(); i++) {
             if (state.recurringRules.at(i).id == input.recurringRuleId) {
-                foundRule = true;
+                rule = &state.recurringRules.at(i);
                 break;
             }
         }
 
-        if (!foundRule) return false;
+        if (rule == nullptr) return false;
+
+        // A generated transaction must match its recurring rule.
+        if (input.kind != rule->kind ||
+            input.walletId != rule->walletId ||
+            input.referenceId != rule->referenceId ||
+            input.amount != rule->amount ||
+            input.occurrenceYear != input.date.year ||
+            input.occurrenceMonth != input.date.month) {
+            return false;
+        }
 
         if (input.occurrenceYear < 1 ||
             input.occurrenceYear > 9999 ||
