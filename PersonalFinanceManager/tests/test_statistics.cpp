@@ -500,6 +500,66 @@ static void testExpenseByCategory() {
     CHECK_EQ(expenseByCategory(s, nullptr, 2, rows), false);
 }
 
+static void expectInvalidBreakdownYears(const AppState& s, const int* years, int count) {
+    DynamicArray<SourceTotal> srcRows;
+    SourceTotal seedSrc;
+    seedSrc.sourceId = 99;
+    seedSrc.total = 500;
+    srcRows.pushBack(seedSrc);
+    CHECK_EQ(incomeBySource(s, years, count, srcRows), false);
+    CHECK_EQ(srcRows.size(), 0);
+
+    DynamicArray<CategoryTotal> catRows;
+    CategoryTotal seedCat;
+    seedCat.categoryId = 99;
+    seedCat.total = 500;
+    catRows.pushBack(seedCat);
+    CHECK_EQ(expenseByCategory(s, years, count, catRows), false);
+    CHECK_EQ(catRows.size(), 0);
+}
+
+// W4-C-02: reject year 0, negative, 10000, mixed lists, and reset rows on failure
+// for incomeBySource and expenseByCategory.
+static void testBreakdownInvalidYears() {
+    AppState s;
+    buildFullFixture(s);
+    addTx(s, 6, 1,    1,  1, TransactionKind::Income,  1, 1, 400); // Salary
+    addTx(s, 7, 9999, 12, 31, TransactionKind::Expense, 1, 1, 150); // Food
+
+    int yZero[]       = {0};
+    int yNeg[]        = {-2026};
+    int yTooBig[]     = {10000};
+    int mixedZero[]   = {2025, 0};
+    int mixedNeg[]    = {2025, -1, 2026};
+    int mixedTooBig[] = {2026, 10000};
+    int yValid[]      = {2025};
+
+    expectInvalidBreakdownYears(s, yZero, 1);
+    expectInvalidBreakdownYears(s, yNeg, 1);
+    expectInvalidBreakdownYears(s, yTooBig, 1);
+    expectInvalidBreakdownYears(s, mixedZero, 2);
+    expectInvalidBreakdownYears(s, mixedNeg, 3);
+    expectInvalidBreakdownYears(s, mixedTooBig, 2);
+    expectInvalidBreakdownYears(s, yValid, 0);
+    expectInvalidBreakdownYears(s, yValid, -1);
+    expectInvalidBreakdownYears(s, nullptr, 1);
+
+    // Boundary valid years 1 and 9999 must be accepted.
+    int bounds[] = {1, 9999};
+    DynamicArray<SourceTotal> srcRows;
+    CHECK_EQ(incomeBySource(s, bounds, 2, srcRows), true);
+    CHECK_EQ(srcRows.size(), 3);
+    CHECK_EQ(srcRows.at(0).total, 400);
+    CHECK_EQ(srcRows.at(1).total, 0);
+    CHECK_EQ(srcRows.at(2).total, 0);
+
+    DynamicArray<CategoryTotal> catRows;
+    CHECK_EQ(expenseByCategory(s, bounds, 2, catRows), true);
+    CHECK_EQ(catRows.size(), 3);
+    CHECK_EQ(catRows.at(0).total, 150);
+    CHECK_EQ(catRows.at(1).total, 0);
+    CHECK_EQ(catRows.at(2).total, 0);
+}
 
 int main() {
     testFixtureIsConsistent();
@@ -518,6 +578,7 @@ int main() {
     testYearSummaryInvalidYears();
     testIncomeBySource();
     testExpenseByCategory();
+    testBreakdownInvalidYears();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
