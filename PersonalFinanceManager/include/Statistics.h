@@ -31,12 +31,12 @@ struct CategoryTotal {
 };
 
 // Report 1: income / expense / net for from..to, both dates inclusive.
-// Returns false (and zero totals) if from > to.
+// Returns false (and zero totals) if either date is invalid or from > to.
 bool summarizeRange(const AppState& state, const Date& from,
                     const Date& to, MoneySummary& out);
 
 // Report 2: same date range, one row per wallet (wallets with no activity
-// still get a row with zeros). Returns false if from > to.
+// still get a row with zeros). Returns false if either date is invalid or from > to.
 bool summarizeByWallet(const AppState& state, const Date& from,
                        const Date& to, DynamicArray<WalletSummary>& out);
 
