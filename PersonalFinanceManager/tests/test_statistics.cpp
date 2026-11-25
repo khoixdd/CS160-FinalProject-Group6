@@ -648,6 +648,64 @@ static void testNonconsecutiveSourceAndCategoryIds() {
     CHECK_EQ(catRows.at(2).total, 750);
 }
 
+static void buildLargeAmountFixture(AppState& s) {
+    Wallet cash; cash.id = 1; cash.name = "Cash"; cash.openingBalance = 5000000000LL;
+    Wallet bank; bank.id = 2; bank.name = "Bank"; bank.openingBalance = 0;
+    s.wallets.pushBack(cash);
+    s.wallets.pushBack(bank);
+
+    IncomeSource salary; salary.id = 1; salary.name = "Salary";
+    IncomeSource invest; invest.id = 2; invest.name = "Investment";
+    s.incomeSources.pushBack(salary);
+    s.incomeSources.pushBack(invest);
+
+    ExpenseCategory housing; housing.id = 1; housing.name = "Housing";
+    ExpenseCategory travel;  travel.id  = 2; travel.name  = "Travel";
+    s.categories.pushBack(housing);
+    s.categories.pushBack(travel);
+
+    addTx(s, 1, 2025, 11, 10, TransactionKind::Income,  1, 1, 3000000000LL);
+    addTx(s, 2, 2025, 11, 20, TransactionKind::Expense, 1, 1, 1200000000LL);
+    addTx(s, 3, 2026, 2,  5,  TransactionKind::Income,  2, 2, 4500000000LL);
+    addTx(s, 4, 2026, 2,  10, TransactionKind::Expense, 1, 2, 2500000000LL);
+    addTx(s, 5, 2026, 2,  15, TransactionKind::Expense, 2, 1, 6000000000LL);
+}
+
+// W4-C-04: verify 64-bit monetary totals (> INT_MAX and < INT_MIN) in range
+// and wallet reports.
+static void testLargeAmountsRangeAndWallet() {
+    static_assert(sizeof(MoneySummary::income) == 8, "MoneySummary must be 64-bit");
+    static_assert(sizeof(WalletSummary::income) == 8, "WalletSummary must be 64-bit");
+
+    AppState s;
+    buildLargeAmountFixture(s);
+
+    // Positive net above INT_MAX: 3.0B + 4.5B = 7.5B income; 1.2B expense -> +6.3B net.
+    MoneySummary posNet;
+    CHECK_EQ(summarizeRange(s, {2025, 11, 10}, {2026, 2, 5}, posNet), true);
+    CHECK_EQ(posNet.income, 7500000000LL);
+    CHECK_EQ(posNet.expense, 1200000000LL);
+    CHECK_EQ(posNet.net, 6300000000LL);
+
+    // Whole fixture: 7.5B income, 9.7B expense -> -2.2B net (below INT_MIN).
+    MoneySummary allRange;
+    CHECK_EQ(summarizeRange(s, {2025, 11, 10}, {2026, 2, 15}, allRange), true);
+    CHECK_EQ(allRange.income, 7500000000LL);
+    CHECK_EQ(allRange.expense, 9700000000LL);
+    CHECK_EQ(allRange.net, -2200000000LL);
+
+    // By wallet: Cash 3.0B / 7.2B (opening 5.0B excluded), Bank 4.5B / 2.5B.
+    DynamicArray<WalletSummary> rows;
+    CHECK_EQ(summarizeByWallet(s, {2025, 11, 10}, {2026, 2, 15}, rows), true);
+    CHECK_EQ(rows.size(), 2);
+    CHECK_EQ(rows.at(0).walletId, 1);
+    CHECK_EQ(rows.at(0).income, 3000000000LL);
+    CHECK_EQ(rows.at(0).expense, 7200000000LL);
+    CHECK_EQ(rows.at(1).walletId, 2);
+    CHECK_EQ(rows.at(1).income, 4500000000LL);
+    CHECK_EQ(rows.at(1).expense, 2500000000LL);
+}
+
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
@@ -668,6 +726,7 @@ int main() {
     testBreakdownInvalidYears();
     testNonconsecutiveWalletIds();
     testNonconsecutiveSourceAndCategoryIds();
+    testLargeAmountsRangeAndWallet();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
