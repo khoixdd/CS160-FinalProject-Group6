@@ -706,6 +706,62 @@ static void testLargeAmountsRangeAndWallet() {
     CHECK_EQ(rows.at(1).expense, 2500000000LL);
 }
 
+// W4-C-04: verify 64-bit monetary totals (> INT_MAX and < INT_MIN) in annual
+// summary, income-by-source, and expense-by-category reports.
+static void testLargeAmountsAnnualAndBreakdowns() {
+    static_assert(sizeof(SourceTotal::total) == 8, "SourceTotal must be 64-bit");
+    static_assert(sizeof(CategoryTotal::total) == 8, "CategoryTotal must be 64-bit");
+
+    AppState s;
+    buildLargeAmountFixture(s);
+
+    int y2025[] = {2025};
+    MoneySummary r2025;
+    CHECK_EQ(summarizeYears(s, y2025, 1, r2025), true);
+    CHECK_EQ(r2025.income, 3000000000LL);
+    CHECK_EQ(r2025.expense, 1200000000LL);
+    CHECK_EQ(r2025.net, 1800000000LL);
+
+    int y2026[] = {2026};
+    MoneySummary r2026;
+    CHECK_EQ(summarizeYears(s, y2026, 1, r2026), true);
+    CHECK_EQ(r2026.income, 4500000000LL);
+    CHECK_EQ(r2026.expense, 8500000000LL);
+    CHECK_EQ(r2026.net, -4000000000LL);
+
+    int repeatedBoth[] = {2025, 2026, 2026};
+    MoneySummary rAll;
+    CHECK_EQ(summarizeYears(s, repeatedBoth, 3, rAll), true);
+    CHECK_EQ(rAll.income, 7500000000LL);
+    CHECK_EQ(rAll.expense, 9700000000LL);
+    CHECK_EQ(rAll.net, -2200000000LL);
+
+    // Income by source: Salary 3.0B, Investment 4.5B, sum 7.5B.
+    DynamicArray<SourceTotal> srcRows;
+    CHECK_EQ(incomeBySource(s, repeatedBoth, 3, srcRows), true);
+    CHECK_EQ(srcRows.size(), 2);
+    CHECK_EQ(srcRows.at(0).sourceId, 1); CHECK_EQ(srcRows.at(0).total, 3000000000LL);
+    CHECK_EQ(srcRows.at(1).sourceId, 2); CHECK_EQ(srcRows.at(1).total, 4500000000LL);
+    CHECK_EQ(srcRows.at(0).total + srcRows.at(1).total, rAll.income);
+
+    // Expense by category: Housing 1.2B + 2.5B = 3.7B, Travel 6.0B, sum 9.7B.
+    DynamicArray<CategoryTotal> catRows;
+    CHECK_EQ(expenseByCategory(s, repeatedBoth, 3, catRows), true);
+    CHECK_EQ(catRows.size(), 2);
+    CHECK_EQ(catRows.at(0).categoryId, 1); CHECK_EQ(catRows.at(0).total, 3700000000LL);
+    CHECK_EQ(catRows.at(1).categoryId, 2); CHECK_EQ(catRows.at(1).total, 6000000000LL);
+    CHECK_EQ(catRows.at(0).total + catRows.at(1).total, rAll.expense);
+
+    // Single year 2026 breakdowns.
+    CHECK_EQ(incomeBySource(s, y2026, 1, srcRows), true);
+    CHECK_EQ(srcRows.at(0).total, 0);
+    CHECK_EQ(srcRows.at(1).total, 4500000000LL);
+
+    CHECK_EQ(expenseByCategory(s, y2026, 1, catRows), true);
+    CHECK_EQ(catRows.at(0).total, 2500000000LL);
+    CHECK_EQ(catRows.at(1).total, 6000000000LL);
+}
+
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
@@ -727,6 +783,7 @@ int main() {
     testNonconsecutiveWalletIds();
     testNonconsecutiveSourceAndCategoryIds();
     testLargeAmountsRangeAndWallet();
+    testLargeAmountsAnnualAndBreakdowns();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
