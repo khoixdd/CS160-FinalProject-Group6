@@ -221,7 +221,58 @@ static void testValidLeapDayRange() {
     CHECK_EQ(rows.size(), 3);
 }
 
+// W4-C-01: century leap/non-leap years, 30-day months, out-of-range years,
+// and transactions occurring on Feb 29.
+static void testLeapYearBoundariesAnd30DayMonths() {
+    AppState s;
+    buildFullFixture(s);
+    addTx(s, 6, 2000, 2, 29, TransactionKind::Income,  1, 1, 1000); // Salary -> Cash
+    addTx(s, 7, 2024, 2, 29, TransactionKind::Expense, 2, 2, 300);  // Transport -> Bank
 
+    Date invalidDates[5];
+    invalidDates[0] = {2026, 4, 31};   // April has 30 days
+    invalidDates[1] = {2026, 6, 31};   // June has 30 days
+    invalidDates[2] = {1900, 2, 29};   // century year not divisible by 400
+    invalidDates[3] = {0, 1, 1};       // year below 1
+    invalidDates[4] = {10000, 1, 1};   // year above 9999
+
+    Date validDate = {2026, 1, 1};
+    for (int i = 0; i < 5; ++i) {
+        MoneySummary r;
+        r.income = 50; r.expense = 25; r.net = 25;
+        CHECK_EQ(summarizeRange(s, invalidDates[i], validDate, r), false);
+        CHECK_EQ(r.income, 0);
+        CHECK_EQ(r.expense, 0);
+        CHECK_EQ(r.net, 0);
+
+        DynamicArray<WalletSummary> rows;
+        WalletSummary seed;
+        seed.walletId = 99;
+        rows.pushBack(seed);
+        CHECK_EQ(summarizeByWallet(s, validDate, invalidDates[i], rows), false);
+        CHECK_EQ(rows.size(), 0);
+    }
+
+    // Year 2000 is divisible by 400 -> valid leap day, matches tx #6.
+    Date leap2000 = {2000, 2, 29};
+    MoneySummary r2000;
+    CHECK_EQ(summarizeRange(s, leap2000, leap2000, r2000), true);
+    CHECK_EQ(r2000.income, 1000);
+    CHECK_EQ(r2000.expense, 0);
+    CHECK_EQ(r2000.net, 1000);
+
+    // Year 2024 is a leap year -> valid leap day, matches tx #7 in Bank.
+    Date leap2024 = {2024, 2, 29};
+    DynamicArray<WalletSummary> rows2024;
+    CHECK_EQ(summarizeByWallet(s, leap2024, leap2024, rows2024), true);
+    CHECK_EQ(rows2024.size(), 3);
+    CHECK_EQ(rows2024.at(0).income, 0);
+    CHECK_EQ(rows2024.at(0).expense, 0);
+    CHECK_EQ(rows2024.at(1).income, 0);
+    CHECK_EQ(rows2024.at(1).expense, 300);
+    CHECK_EQ(rows2024.at(2).income, 0);
+    CHECK_EQ(rows2024.at(2).expense, 0);
+}
 // W2-C-02 / T10: whole fixture range. Cash 1000/350, Bank 500/70, Savings 0/0.
 static void testWalletReportWholeRange() {
     AppState s;
@@ -414,6 +465,8 @@ int main() {
     testSingleDayAndReversed();
     testInvalidReportDateRanges();
     testValidLeapDayRange();
+    testValidLeapDayRange();
+    testLeapYearBoundariesAnd30DayMonths();
     testEmptyRange();
     testNegativeNet();
     testWalletReportWholeRange();
