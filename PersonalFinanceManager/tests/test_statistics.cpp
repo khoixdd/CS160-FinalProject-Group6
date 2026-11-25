@@ -382,6 +382,48 @@ static void testYearSummaryEdgeCases() {
     CHECK_EQ(summarizeYears(s, none, 0, r), false);      // nothing selected
     CHECK_EQ(summarizeYears(s, nullptr, 1, r), false);   // no year list
 }
+static void expectInvalidYearSummary(const AppState& s, const int* years, int count) {
+    MoneySummary r;
+    r.income = 999;
+    r.expense = 888;
+    r.net = 111;
+    CHECK_EQ(summarizeYears(s, years, count, r), false);
+    CHECK_EQ(r.income, 0);
+    CHECK_EQ(r.expense, 0);
+    CHECK_EQ(r.net, 0);
+}
+
+// W4-C-02: reject year 0, negative, 10000, mixed lists, and reset output on failure.
+static void testYearSummaryInvalidYears() {
+    AppState s;
+    buildFullFixture(s);
+    addTx(s, 6, 1,    1,  1, TransactionKind::Income,  1, 1, 400);
+    addTx(s, 7, 9999, 12, 31, TransactionKind::Expense, 1, 1, 150);
+
+    int yZero[]       = {0};
+    int yNeg[]        = {-2025};
+    int yTooBig[]     = {10000};
+    int mixedZero[]   = {2025, 0};
+    int mixedNeg[]    = {2025, -1, 2026};
+    int mixedTooBig[] = {2025, 10000};
+    int yValid[]      = {2025};
+
+    expectInvalidYearSummary(s, yZero, 1);
+    expectInvalidYearSummary(s, yNeg, 1);
+    expectInvalidYearSummary(s, yTooBig, 1);
+    expectInvalidYearSummary(s, mixedZero, 2);
+    expectInvalidYearSummary(s, mixedNeg, 3);
+    expectInvalidYearSummary(s, mixedTooBig, 2);
+    expectInvalidYearSummary(s, yValid, -1);
+
+    // Boundary valid years 1 and 9999 must be accepted.
+    int bounds[] = {1, 9999};
+    MoneySummary r;
+    CHECK_EQ(summarizeYears(s, bounds, 2, r), true);
+    CHECK_EQ(r.income, 400);
+    CHECK_EQ(r.expense, 150);
+    CHECK_EQ(r.net, 250);
+}
 
 // W3-C-01 / T13: income by source. 2025: Salary 1000. 2026: Gift 500.
 static void testIncomeBySource() {
@@ -465,7 +507,6 @@ int main() {
     testSingleDayAndReversed();
     testInvalidReportDateRanges();
     testValidLeapDayRange();
-    testValidLeapDayRange();
     testLeapYearBoundariesAnd30DayMonths();
     testEmptyRange();
     testNegativeNet();
@@ -474,6 +515,7 @@ int main() {
     testWalletReportReversedAndEmpty();
     testYearSummary();
     testYearSummaryEdgeCases();
+    testYearSummaryInvalidYears();
     testIncomeBySource();
     testExpenseByCategory();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
