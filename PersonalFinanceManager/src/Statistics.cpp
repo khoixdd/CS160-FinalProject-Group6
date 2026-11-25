@@ -43,9 +43,17 @@ static bool isYearSelected(const int* years, int yearCount, int year) {
     return false;
 }
 
-// At least one year must be selected.
+// At least one year must be selected, and every year must be in 1..9999.
 static bool isYearSelectionValid(const int* years, int yearCount) {
-    return years != nullptr && yearCount > 0;
+    if (years == nullptr || yearCount <= 0) {
+        return false;
+    }
+    for (int i = 0; i < yearCount; ++i) {
+        if (years[i] < 1 || years[i] > 9999) {
+            return false;
+        }
+    }
+    return true;
 }
 
 // W2-C-02: one row per wallet, in the same order as state.wallets.

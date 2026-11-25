@@ -40,16 +40,18 @@ bool summarizeRange(const AppState& state, const Date& from,
 bool summarizeByWallet(const AppState& state, const Date& from,
                        const Date& to, DynamicArray<WalletSummary>& out);
 
-// Report 3: totals for the selected years. Repeated years are counted once.
+// Report 3: totals for the selected years (each in 1..9999). Repeated years
+// are counted once. Returns false (and zero totals) if selection is invalid.
 bool summarizeYears(const AppState& state, const int* years, int yearCount,
                     MoneySummary& out);
 
-// Report 4: income grouped by source ID for the selected years.
+// Report 4: income grouped by source ID for the selected years (each in 1..9999).
+// Returns false (and empty output) if selection is invalid.
 bool incomeBySource(const AppState& state, const int* years, int yearCount,
                     DynamicArray<SourceTotal>& out);
 
-// Report 5: expense grouped by category ID for the selected years.
+// Report 5: expense grouped by category ID for the selected years (each in 1..9999).
+// Returns false (and empty output) if selection is invalid.
 bool expenseByCategory(const AppState& state, const int* years, int yearCount,
                        DynamicArray<CategoryTotal>& out);
-
 #endif
