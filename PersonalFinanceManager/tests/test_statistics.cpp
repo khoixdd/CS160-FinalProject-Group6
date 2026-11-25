@@ -594,6 +594,60 @@ static void testNonconsecutiveWalletIds() {
     CHECK_EQ(rows.at(2).walletId, 7);  CHECK_EQ(rows.at(2).income, 900);  CHECK_EQ(rows.at(2).expense, 0);
 }
 
+// W4-C-03: nonconsecutive source and category IDs stored out of ID order must
+// accumulate by referenceId and keep Income/Expense separate even when IDs overlap.
+static void testNonconsecutiveSourceAndCategoryIds() {
+    AppState s;
+
+    IncomeSource s15; s15.id = 15; s15.name = "Salary";
+    IncomeSource s2;  s2.id  = 2;  s2.name  = "Bonus";
+    IncomeSource s7;  s7.id  = 7;  s7.name  = "Gift";
+    s.incomeSources.pushBack(s15);
+    s.incomeSources.pushBack(s2);
+    s.incomeSources.pushBack(s7);
+
+    ExpenseCategory c7;  c7.id  = 7;  c7.name  = "Rent";
+    ExpenseCategory c15; c15.id = 15; c15.name = "Food";
+    ExpenseCategory c2;  c2.id  = 2;  c2.name  = "Transport";
+    s.categories.pushBack(c7);
+    s.categories.pushBack(c15);
+    s.categories.pushBack(c2);
+
+    addTx(s, 11, 2025, 6, 1, TransactionKind::Income,  15, 1, 2000);
+    addTx(s, 14, 2026, 2, 1, TransactionKind::Income,  15, 1, 500);
+    addTx(s, 22, 2026, 3, 1, TransactionKind::Income,  7,  1, 800);
+    addTx(s, 30, 2025, 7, 1, TransactionKind::Expense, 15, 1, 350);
+    addTx(s, 33, 2026, 4, 1, TransactionKind::Expense, 2,  1, 600);
+    addTx(s, 41, 2026, 5, 1, TransactionKind::Expense, 2,  1, 150);
+
+    int both[] = {2025, 2026};
+    DynamicArray<SourceTotal> srcRows;
+    CHECK_EQ(incomeBySource(s, both, 2, srcRows), true);
+    CHECK_EQ(srcRows.size(), 3);
+    CHECK_EQ(srcRows.at(0).sourceId, 15); CHECK_EQ(srcRows.at(0).total, 2500);
+    CHECK_EQ(srcRows.at(1).sourceId, 2);  CHECK_EQ(srcRows.at(1).total, 0);
+    CHECK_EQ(srcRows.at(2).sourceId, 7);  CHECK_EQ(srcRows.at(2).total, 800);
+
+    DynamicArray<CategoryTotal> catRows;
+    CHECK_EQ(expenseByCategory(s, both, 2, catRows), true);
+    CHECK_EQ(catRows.size(), 3);
+    CHECK_EQ(catRows.at(0).categoryId, 7);  CHECK_EQ(catRows.at(0).total, 0);
+    CHECK_EQ(catRows.at(1).categoryId, 15); CHECK_EQ(catRows.at(1).total, 350);
+    CHECK_EQ(catRows.at(2).categoryId, 2);  CHECK_EQ(catRows.at(2).total, 750);
+
+    // Check single year 2026 to verify year filtering with out-of-order IDs.
+    int y2026[] = {2026};
+    CHECK_EQ(incomeBySource(s, y2026, 1, srcRows), true);
+    CHECK_EQ(srcRows.at(0).total, 500);
+    CHECK_EQ(srcRows.at(1).total, 0);
+    CHECK_EQ(srcRows.at(2).total, 800);
+
+    CHECK_EQ(expenseByCategory(s, y2026, 1, catRows), true);
+    CHECK_EQ(catRows.at(0).total, 0);
+    CHECK_EQ(catRows.at(1).total, 0);
+    CHECK_EQ(catRows.at(2).total, 750);
+}
+
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
@@ -613,6 +667,7 @@ int main() {
     testExpenseByCategory();
     testBreakdownInvalidYears();
     testNonconsecutiveWalletIds();
+    testNonconsecutiveSourceAndCategoryIds();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
