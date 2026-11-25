@@ -131,6 +131,97 @@ static void buildFullFixture(AppState& s) {
     s.categories.pushBack(rent);
 }
 
+// W4-C-01: invalid calendar dates must be rejected.
+static void testInvalidReportDateRanges() {
+    AppState s;
+    buildFullFixture(s);
+
+    Date invalidDates[6];
+
+    invalidDates[0].year = 2026;
+    invalidDates[0].month = 1;
+    invalidDates[0].day = 0;
+
+    invalidDates[1].year = 2026;
+    invalidDates[1].month = 1;
+    invalidDates[1].day = 32;
+
+    invalidDates[2].year = 2026;
+    invalidDates[2].month = 0;
+    invalidDates[2].day = 10;
+
+    invalidDates[3].year = 2026;
+    invalidDates[3].month = 13;
+    invalidDates[3].day = 10;
+
+    invalidDates[4].year = 2026;
+    invalidDates[4].month = 2;
+    invalidDates[4].day = 30;
+
+    invalidDates[5].year = 2025;
+    invalidDates[5].month = 2;
+    invalidDates[5].day = 29;
+
+    Date validFrom;
+    validFrom.year = 2024;
+    validFrom.month = 1;
+    validFrom.day = 1;
+
+    Date validTo;
+    validTo.year = 2027;
+    validTo.month = 12;
+    validTo.day = 31;
+
+    for (int i = 0; i < 6; ++i) {
+        MoneySummary r;
+        r.income = 100;
+        r.expense = 200;
+        r.net = -100;
+
+        CHECK_EQ(summarizeRange(s, invalidDates[i], validTo, r), false);
+        CHECK_EQ(r.income, 0);
+        CHECK_EQ(r.expense, 0);
+        CHECK_EQ(r.net, 0);
+
+        CHECK_EQ(summarizeRange(s, validFrom, invalidDates[i], r), false);
+        CHECK_EQ(r.income, 0);
+        CHECK_EQ(r.expense, 0);
+        CHECK_EQ(r.net, 0);
+
+        DynamicArray<WalletSummary> rows;
+        WalletSummary seed;
+        seed.walletId = 99;
+        rows.pushBack(seed);
+
+        CHECK_EQ(summarizeByWallet(s, invalidDates[i], validTo, rows), false);
+        CHECK_EQ(rows.size(), 0);
+
+        rows.pushBack(seed);
+
+        CHECK_EQ(summarizeByWallet(s, validFrom, invalidDates[i], rows), false);
+        CHECK_EQ(rows.size(), 0);
+    }
+}
+
+// W4-C-01: valid leap day must be accepted.
+static void testValidLeapDayRange() {
+    AppState s;
+    buildFullFixture(s);
+
+    Date leapDay;
+    leapDay.year = 2024;
+    leapDay.month = 2;
+    leapDay.day = 29;
+
+    MoneySummary r;
+    CHECK_EQ(summarizeRange(s, leapDay, leapDay, r), true);
+
+    DynamicArray<WalletSummary> rows;
+    CHECK_EQ(summarizeByWallet(s, leapDay, leapDay, rows), true);
+    CHECK_EQ(rows.size(), 3);
+}
+
+
 // W2-C-02 / T10: whole fixture range. Cash 1000/350, Bank 500/70, Savings 0/0.
 static void testWalletReportWholeRange() {
     AppState s;
@@ -321,6 +412,8 @@ int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
     testSingleDayAndReversed();
+    testInvalidReportDateRanges();
+    testValidLeapDayRange();
     testEmptyRange();
     testNegativeNet();
     testWalletReportWholeRange();
