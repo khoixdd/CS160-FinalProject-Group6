@@ -561,6 +561,39 @@ static void testBreakdownInvalidYears() {
     CHECK_EQ(catRows.at(2).total, 0);
 }
 
+// W4-C-03: nonconsecutive wallet IDs stored out of ID order must accumulate
+// by walletId rather than array index, and preserve storage order.
+static void testNonconsecutiveWalletIds() {
+    AppState s;
+
+    Wallet w15; w15.id = 15; w15.name = "Savings"; w15.openingBalance = 500;
+    Wallet w2;  w2.id  = 2;  w2.name  = "Cash";    w2.openingBalance  = 100;
+    Wallet w7;  w7.id  = 7;  w7.name  = "Bank";    w7.openingBalance  = 200;
+    s.wallets.pushBack(w15);
+    s.wallets.pushBack(w2);
+    s.wallets.pushBack(w7);
+
+    addTx(s, 10, 2026, 3, 5,  TransactionKind::Income,  1, 15, 1200);
+    addTx(s, 25, 2026, 3, 6,  TransactionKind::Expense, 1, 2,  150);
+    addTx(s, 31, 2026, 3, 7,  TransactionKind::Expense, 1, 15, 300);
+    addTx(s, 44, 2026, 3, 8,  TransactionKind::Income,  1, 2,  400);
+    addTx(s, 50, 2026, 2, 28, TransactionKind::Income,  1, 7,  900);
+
+    Date marchFrom = {2026, 3, 1};
+    Date marchTo   = {2026, 3, 31};
+    DynamicArray<WalletSummary> rows;
+    CHECK_EQ(summarizeByWallet(s, marchFrom, marchTo, rows), true);
+    CHECK_EQ(rows.size(), 3);
+    CHECK_EQ(rows.at(0).walletId, 15); CHECK_EQ(rows.at(0).income, 1200); CHECK_EQ(rows.at(0).expense, 300);
+    CHECK_EQ(rows.at(1).walletId, 2);  CHECK_EQ(rows.at(1).income, 400);  CHECK_EQ(rows.at(1).expense, 150);
+    CHECK_EQ(rows.at(2).walletId, 7);  CHECK_EQ(rows.at(2).income, 0);    CHECK_EQ(rows.at(2).expense, 0);
+
+    // Expanding range to Feb..Mar includes wallet 7's Feb transaction.
+    Date febFrom = {2026, 2, 1};
+    CHECK_EQ(summarizeByWallet(s, febFrom, marchTo, rows), true);
+    CHECK_EQ(rows.at(2).walletId, 7);  CHECK_EQ(rows.at(2).income, 900);  CHECK_EQ(rows.at(2).expense, 0);
+}
+
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
@@ -579,6 +612,7 @@ int main() {
     testIncomeBySource();
     testExpenseByCategory();
     testBreakdownInvalidYears();
+    testNonconsecutiveWalletIds();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
