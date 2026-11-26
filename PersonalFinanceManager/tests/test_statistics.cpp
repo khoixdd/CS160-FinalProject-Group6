@@ -131,6 +131,148 @@ static void buildFullFixture(AppState& s) {
     s.categories.pushBack(rent);
 }
 
+// W4-C-01: invalid calendar dates must be rejected.
+static void testInvalidReportDateRanges() {
+    AppState s;
+    buildFullFixture(s);
+
+    Date invalidDates[6];
+
+    invalidDates[0].year = 2026;
+    invalidDates[0].month = 1;
+    invalidDates[0].day = 0;
+
+    invalidDates[1].year = 2026;
+    invalidDates[1].month = 1;
+    invalidDates[1].day = 32;
+
+    invalidDates[2].year = 2026;
+    invalidDates[2].month = 0;
+    invalidDates[2].day = 10;
+
+    invalidDates[3].year = 2026;
+    invalidDates[3].month = 13;
+    invalidDates[3].day = 10;
+
+    invalidDates[4].year = 2026;
+    invalidDates[4].month = 2;
+    invalidDates[4].day = 30;
+
+    invalidDates[5].year = 2025;
+    invalidDates[5].month = 2;
+    invalidDates[5].day = 29;
+
+    Date validFrom;
+    validFrom.year = 2024;
+    validFrom.month = 1;
+    validFrom.day = 1;
+
+    Date validTo;
+    validTo.year = 2027;
+    validTo.month = 12;
+    validTo.day = 31;
+
+    for (int i = 0; i < 6; ++i) {
+        MoneySummary r;
+        r.income = 100;
+        r.expense = 200;
+        r.net = -100;
+
+        CHECK_EQ(summarizeRange(s, invalidDates[i], validTo, r), false);
+        CHECK_EQ(r.income, 0);
+        CHECK_EQ(r.expense, 0);
+        CHECK_EQ(r.net, 0);
+
+        CHECK_EQ(summarizeRange(s, validFrom, invalidDates[i], r), false);
+        CHECK_EQ(r.income, 0);
+        CHECK_EQ(r.expense, 0);
+        CHECK_EQ(r.net, 0);
+
+        DynamicArray<WalletSummary> rows;
+        WalletSummary seed;
+        seed.walletId = 99;
+        rows.pushBack(seed);
+
+        CHECK_EQ(summarizeByWallet(s, invalidDates[i], validTo, rows), false);
+        CHECK_EQ(rows.size(), 0);
+
+        rows.pushBack(seed);
+
+        CHECK_EQ(summarizeByWallet(s, validFrom, invalidDates[i], rows), false);
+        CHECK_EQ(rows.size(), 0);
+    }
+}
+
+// W4-C-01: valid leap day must be accepted.
+static void testValidLeapDayRange() {
+    AppState s;
+    buildFullFixture(s);
+
+    Date leapDay;
+    leapDay.year = 2024;
+    leapDay.month = 2;
+    leapDay.day = 29;
+
+    MoneySummary r;
+    CHECK_EQ(summarizeRange(s, leapDay, leapDay, r), true);
+
+    DynamicArray<WalletSummary> rows;
+    CHECK_EQ(summarizeByWallet(s, leapDay, leapDay, rows), true);
+    CHECK_EQ(rows.size(), 3);
+}
+
+// W4-C-01: century leap/non-leap years, 30-day months, out-of-range years,
+// and transactions occurring on Feb 29.
+static void testLeapYearBoundariesAnd30DayMonths() {
+    AppState s;
+    buildFullFixture(s);
+    addTx(s, 6, 2000, 2, 29, TransactionKind::Income,  1, 1, 1000); // Salary -> Cash
+    addTx(s, 7, 2024, 2, 29, TransactionKind::Expense, 2, 2, 300);  // Transport -> Bank
+
+    Date invalidDates[5];
+    invalidDates[0] = {2026, 4, 31};   // April has 30 days
+    invalidDates[1] = {2026, 6, 31};   // June has 30 days
+    invalidDates[2] = {1900, 2, 29};   // century year not divisible by 400
+    invalidDates[3] = {0, 1, 1};       // year below 1
+    invalidDates[4] = {10000, 1, 1};   // year above 9999
+
+    Date validDate = {2026, 1, 1};
+    for (int i = 0; i < 5; ++i) {
+        MoneySummary r;
+        r.income = 50; r.expense = 25; r.net = 25;
+        CHECK_EQ(summarizeRange(s, invalidDates[i], validDate, r), false);
+        CHECK_EQ(r.income, 0);
+        CHECK_EQ(r.expense, 0);
+        CHECK_EQ(r.net, 0);
+
+        DynamicArray<WalletSummary> rows;
+        WalletSummary seed;
+        seed.walletId = 99;
+        rows.pushBack(seed);
+        CHECK_EQ(summarizeByWallet(s, validDate, invalidDates[i], rows), false);
+        CHECK_EQ(rows.size(), 0);
+    }
+
+    // Year 2000 is divisible by 400 -> valid leap day, matches tx #6.
+    Date leap2000 = {2000, 2, 29};
+    MoneySummary r2000;
+    CHECK_EQ(summarizeRange(s, leap2000, leap2000, r2000), true);
+    CHECK_EQ(r2000.income, 1000);
+    CHECK_EQ(r2000.expense, 0);
+    CHECK_EQ(r2000.net, 1000);
+
+    // Year 2024 is a leap year -> valid leap day, matches tx #7 in Bank.
+    Date leap2024 = {2024, 2, 29};
+    DynamicArray<WalletSummary> rows2024;
+    CHECK_EQ(summarizeByWallet(s, leap2024, leap2024, rows2024), true);
+    CHECK_EQ(rows2024.size(), 3);
+    CHECK_EQ(rows2024.at(0).income, 0);
+    CHECK_EQ(rows2024.at(0).expense, 0);
+    CHECK_EQ(rows2024.at(1).income, 0);
+    CHECK_EQ(rows2024.at(1).expense, 300);
+    CHECK_EQ(rows2024.at(2).income, 0);
+    CHECK_EQ(rows2024.at(2).expense, 0);
+}
 // W2-C-02 / T10: whole fixture range. Cash 1000/350, Bank 500/70, Savings 0/0.
 static void testWalletReportWholeRange() {
     AppState s;
@@ -240,6 +382,48 @@ static void testYearSummaryEdgeCases() {
     CHECK_EQ(summarizeYears(s, none, 0, r), false);      // nothing selected
     CHECK_EQ(summarizeYears(s, nullptr, 1, r), false);   // no year list
 }
+static void expectInvalidYearSummary(const AppState& s, const int* years, int count) {
+    MoneySummary r;
+    r.income = 999;
+    r.expense = 888;
+    r.net = 111;
+    CHECK_EQ(summarizeYears(s, years, count, r), false);
+    CHECK_EQ(r.income, 0);
+    CHECK_EQ(r.expense, 0);
+    CHECK_EQ(r.net, 0);
+}
+
+// W4-C-02: reject year 0, negative, 10000, mixed lists, and reset output on failure.
+static void testYearSummaryInvalidYears() {
+    AppState s;
+    buildFullFixture(s);
+    addTx(s, 6, 1,    1,  1, TransactionKind::Income,  1, 1, 400);
+    addTx(s, 7, 9999, 12, 31, TransactionKind::Expense, 1, 1, 150);
+
+    int yZero[]       = {0};
+    int yNeg[]        = {-2025};
+    int yTooBig[]     = {10000};
+    int mixedZero[]   = {2025, 0};
+    int mixedNeg[]    = {2025, -1, 2026};
+    int mixedTooBig[] = {2025, 10000};
+    int yValid[]      = {2025};
+
+    expectInvalidYearSummary(s, yZero, 1);
+    expectInvalidYearSummary(s, yNeg, 1);
+    expectInvalidYearSummary(s, yTooBig, 1);
+    expectInvalidYearSummary(s, mixedZero, 2);
+    expectInvalidYearSummary(s, mixedNeg, 3);
+    expectInvalidYearSummary(s, mixedTooBig, 2);
+    expectInvalidYearSummary(s, yValid, -1);
+
+    // Boundary valid years 1 and 9999 must be accepted.
+    int bounds[] = {1, 9999};
+    MoneySummary r;
+    CHECK_EQ(summarizeYears(s, bounds, 2, r), true);
+    CHECK_EQ(r.income, 400);
+    CHECK_EQ(r.expense, 150);
+    CHECK_EQ(r.net, 250);
+}
 
 // W3-C-01 / T13: income by source. 2025: Salary 1000. 2026: Gift 500.
 static void testIncomeBySource() {
@@ -316,11 +500,275 @@ static void testExpenseByCategory() {
     CHECK_EQ(expenseByCategory(s, nullptr, 2, rows), false);
 }
 
+static void expectInvalidBreakdownYears(const AppState& s, const int* years, int count) {
+    DynamicArray<SourceTotal> srcRows;
+    SourceTotal seedSrc;
+    seedSrc.sourceId = 99;
+    seedSrc.total = 500;
+    srcRows.pushBack(seedSrc);
+    CHECK_EQ(incomeBySource(s, years, count, srcRows), false);
+    CHECK_EQ(srcRows.size(), 0);
+
+    DynamicArray<CategoryTotal> catRows;
+    CategoryTotal seedCat;
+    seedCat.categoryId = 99;
+    seedCat.total = 500;
+    catRows.pushBack(seedCat);
+    CHECK_EQ(expenseByCategory(s, years, count, catRows), false);
+    CHECK_EQ(catRows.size(), 0);
+}
+
+// W4-C-02: reject year 0, negative, 10000, mixed lists, and reset rows on failure
+// for incomeBySource and expenseByCategory.
+static void testBreakdownInvalidYears() {
+    AppState s;
+    buildFullFixture(s);
+    addTx(s, 6, 1,    1,  1, TransactionKind::Income,  1, 1, 400); // Salary
+    addTx(s, 7, 9999, 12, 31, TransactionKind::Expense, 1, 1, 150); // Food
+
+    int yZero[]       = {0};
+    int yNeg[]        = {-2026};
+    int yTooBig[]     = {10000};
+    int mixedZero[]   = {2025, 0};
+    int mixedNeg[]    = {2025, -1, 2026};
+    int mixedTooBig[] = {2026, 10000};
+    int yValid[]      = {2025};
+
+    expectInvalidBreakdownYears(s, yZero, 1);
+    expectInvalidBreakdownYears(s, yNeg, 1);
+    expectInvalidBreakdownYears(s, yTooBig, 1);
+    expectInvalidBreakdownYears(s, mixedZero, 2);
+    expectInvalidBreakdownYears(s, mixedNeg, 3);
+    expectInvalidBreakdownYears(s, mixedTooBig, 2);
+    expectInvalidBreakdownYears(s, yValid, 0);
+    expectInvalidBreakdownYears(s, yValid, -1);
+    expectInvalidBreakdownYears(s, nullptr, 1);
+
+    // Boundary valid years 1 and 9999 must be accepted.
+    int bounds[] = {1, 9999};
+    DynamicArray<SourceTotal> srcRows;
+    CHECK_EQ(incomeBySource(s, bounds, 2, srcRows), true);
+    CHECK_EQ(srcRows.size(), 3);
+    CHECK_EQ(srcRows.at(0).total, 400);
+    CHECK_EQ(srcRows.at(1).total, 0);
+    CHECK_EQ(srcRows.at(2).total, 0);
+
+    DynamicArray<CategoryTotal> catRows;
+    CHECK_EQ(expenseByCategory(s, bounds, 2, catRows), true);
+    CHECK_EQ(catRows.size(), 3);
+    CHECK_EQ(catRows.at(0).total, 150);
+    CHECK_EQ(catRows.at(1).total, 0);
+    CHECK_EQ(catRows.at(2).total, 0);
+}
+
+// W4-C-03: nonconsecutive wallet IDs stored out of ID order must accumulate
+// by walletId rather than array index, and preserve storage order.
+static void testNonconsecutiveWalletIds() {
+    AppState s;
+
+    Wallet w15; w15.id = 15; w15.name = "Savings"; w15.openingBalance = 500;
+    Wallet w2;  w2.id  = 2;  w2.name  = "Cash";    w2.openingBalance  = 100;
+    Wallet w7;  w7.id  = 7;  w7.name  = "Bank";    w7.openingBalance  = 200;
+    s.wallets.pushBack(w15);
+    s.wallets.pushBack(w2);
+    s.wallets.pushBack(w7);
+
+    addTx(s, 10, 2026, 3, 5,  TransactionKind::Income,  1, 15, 1200);
+    addTx(s, 25, 2026, 3, 6,  TransactionKind::Expense, 1, 2,  150);
+    addTx(s, 31, 2026, 3, 7,  TransactionKind::Expense, 1, 15, 300);
+    addTx(s, 44, 2026, 3, 8,  TransactionKind::Income,  1, 2,  400);
+    addTx(s, 50, 2026, 2, 28, TransactionKind::Income,  1, 7,  900);
+
+    Date marchFrom = {2026, 3, 1};
+    Date marchTo   = {2026, 3, 31};
+    DynamicArray<WalletSummary> rows;
+    CHECK_EQ(summarizeByWallet(s, marchFrom, marchTo, rows), true);
+    CHECK_EQ(rows.size(), 3);
+    CHECK_EQ(rows.at(0).walletId, 15); CHECK_EQ(rows.at(0).income, 1200); CHECK_EQ(rows.at(0).expense, 300);
+    CHECK_EQ(rows.at(1).walletId, 2);  CHECK_EQ(rows.at(1).income, 400);  CHECK_EQ(rows.at(1).expense, 150);
+    CHECK_EQ(rows.at(2).walletId, 7);  CHECK_EQ(rows.at(2).income, 0);    CHECK_EQ(rows.at(2).expense, 0);
+
+    // Expanding range to Feb..Mar includes wallet 7's Feb transaction.
+    Date febFrom = {2026, 2, 1};
+    CHECK_EQ(summarizeByWallet(s, febFrom, marchTo, rows), true);
+    CHECK_EQ(rows.at(2).walletId, 7);  CHECK_EQ(rows.at(2).income, 900);  CHECK_EQ(rows.at(2).expense, 0);
+}
+
+// W4-C-03: nonconsecutive source and category IDs stored out of ID order must
+// accumulate by referenceId and keep Income/Expense separate even when IDs overlap.
+static void testNonconsecutiveSourceAndCategoryIds() {
+    AppState s;
+
+    IncomeSource s15; s15.id = 15; s15.name = "Salary";
+    IncomeSource s2;  s2.id  = 2;  s2.name  = "Bonus";
+    IncomeSource s7;  s7.id  = 7;  s7.name  = "Gift";
+    s.incomeSources.pushBack(s15);
+    s.incomeSources.pushBack(s2);
+    s.incomeSources.pushBack(s7);
+
+    ExpenseCategory c7;  c7.id  = 7;  c7.name  = "Rent";
+    ExpenseCategory c15; c15.id = 15; c15.name = "Food";
+    ExpenseCategory c2;  c2.id  = 2;  c2.name  = "Transport";
+    s.categories.pushBack(c7);
+    s.categories.pushBack(c15);
+    s.categories.pushBack(c2);
+
+    addTx(s, 11, 2025, 6, 1, TransactionKind::Income,  15, 1, 2000);
+    addTx(s, 14, 2026, 2, 1, TransactionKind::Income,  15, 1, 500);
+    addTx(s, 22, 2026, 3, 1, TransactionKind::Income,  7,  1, 800);
+    addTx(s, 30, 2025, 7, 1, TransactionKind::Expense, 15, 1, 350);
+    addTx(s, 33, 2026, 4, 1, TransactionKind::Expense, 2,  1, 600);
+    addTx(s, 41, 2026, 5, 1, TransactionKind::Expense, 2,  1, 150);
+
+    int both[] = {2025, 2026};
+    DynamicArray<SourceTotal> srcRows;
+    CHECK_EQ(incomeBySource(s, both, 2, srcRows), true);
+    CHECK_EQ(srcRows.size(), 3);
+    CHECK_EQ(srcRows.at(0).sourceId, 15); CHECK_EQ(srcRows.at(0).total, 2500);
+    CHECK_EQ(srcRows.at(1).sourceId, 2);  CHECK_EQ(srcRows.at(1).total, 0);
+    CHECK_EQ(srcRows.at(2).sourceId, 7);  CHECK_EQ(srcRows.at(2).total, 800);
+
+    DynamicArray<CategoryTotal> catRows;
+    CHECK_EQ(expenseByCategory(s, both, 2, catRows), true);
+    CHECK_EQ(catRows.size(), 3);
+    CHECK_EQ(catRows.at(0).categoryId, 7);  CHECK_EQ(catRows.at(0).total, 0);
+    CHECK_EQ(catRows.at(1).categoryId, 15); CHECK_EQ(catRows.at(1).total, 350);
+    CHECK_EQ(catRows.at(2).categoryId, 2);  CHECK_EQ(catRows.at(2).total, 750);
+
+    // Check single year 2026 to verify year filtering with out-of-order IDs.
+    int y2026[] = {2026};
+    CHECK_EQ(incomeBySource(s, y2026, 1, srcRows), true);
+    CHECK_EQ(srcRows.at(0).total, 500);
+    CHECK_EQ(srcRows.at(1).total, 0);
+    CHECK_EQ(srcRows.at(2).total, 800);
+
+    CHECK_EQ(expenseByCategory(s, y2026, 1, catRows), true);
+    CHECK_EQ(catRows.at(0).total, 0);
+    CHECK_EQ(catRows.at(1).total, 0);
+    CHECK_EQ(catRows.at(2).total, 750);
+}
+
+static void buildLargeAmountFixture(AppState& s) {
+    Wallet cash; cash.id = 1; cash.name = "Cash"; cash.openingBalance = 5000000000LL;
+    Wallet bank; bank.id = 2; bank.name = "Bank"; bank.openingBalance = 0;
+    s.wallets.pushBack(cash);
+    s.wallets.pushBack(bank);
+
+    IncomeSource salary; salary.id = 1; salary.name = "Salary";
+    IncomeSource invest; invest.id = 2; invest.name = "Investment";
+    s.incomeSources.pushBack(salary);
+    s.incomeSources.pushBack(invest);
+
+    ExpenseCategory housing; housing.id = 1; housing.name = "Housing";
+    ExpenseCategory travel;  travel.id  = 2; travel.name  = "Travel";
+    s.categories.pushBack(housing);
+    s.categories.pushBack(travel);
+
+    addTx(s, 1, 2025, 11, 10, TransactionKind::Income,  1, 1, 3000000000LL);
+    addTx(s, 2, 2025, 11, 20, TransactionKind::Expense, 1, 1, 1200000000LL);
+    addTx(s, 3, 2026, 2,  5,  TransactionKind::Income,  2, 2, 4500000000LL);
+    addTx(s, 4, 2026, 2,  10, TransactionKind::Expense, 1, 2, 2500000000LL);
+    addTx(s, 5, 2026, 2,  15, TransactionKind::Expense, 2, 1, 6000000000LL);
+}
+
+// W4-C-04: verify 64-bit monetary totals (> INT_MAX and < INT_MIN) in range
+// and wallet reports.
+static void testLargeAmountsRangeAndWallet() {
+    static_assert(sizeof(MoneySummary::income) == 8, "MoneySummary must be 64-bit");
+    static_assert(sizeof(WalletSummary::income) == 8, "WalletSummary must be 64-bit");
+
+    AppState s;
+    buildLargeAmountFixture(s);
+
+    // Positive net above INT_MAX: 3.0B + 4.5B = 7.5B income; 1.2B expense -> +6.3B net.
+    MoneySummary posNet;
+    CHECK_EQ(summarizeRange(s, {2025, 11, 10}, {2026, 2, 5}, posNet), true);
+    CHECK_EQ(posNet.income, 7500000000LL);
+    CHECK_EQ(posNet.expense, 1200000000LL);
+    CHECK_EQ(posNet.net, 6300000000LL);
+
+    // Whole fixture: 7.5B income, 9.7B expense -> -2.2B net (below INT_MIN).
+    MoneySummary allRange;
+    CHECK_EQ(summarizeRange(s, {2025, 11, 10}, {2026, 2, 15}, allRange), true);
+    CHECK_EQ(allRange.income, 7500000000LL);
+    CHECK_EQ(allRange.expense, 9700000000LL);
+    CHECK_EQ(allRange.net, -2200000000LL);
+
+    // By wallet: Cash 3.0B / 7.2B (opening 5.0B excluded), Bank 4.5B / 2.5B.
+    DynamicArray<WalletSummary> rows;
+    CHECK_EQ(summarizeByWallet(s, {2025, 11, 10}, {2026, 2, 15}, rows), true);
+    CHECK_EQ(rows.size(), 2);
+    CHECK_EQ(rows.at(0).walletId, 1);
+    CHECK_EQ(rows.at(0).income, 3000000000LL);
+    CHECK_EQ(rows.at(0).expense, 7200000000LL);
+    CHECK_EQ(rows.at(1).walletId, 2);
+    CHECK_EQ(rows.at(1).income, 4500000000LL);
+    CHECK_EQ(rows.at(1).expense, 2500000000LL);
+}
+
+// W4-C-04: verify 64-bit monetary totals (> INT_MAX and < INT_MIN) in annual
+// summary, income-by-source, and expense-by-category reports.
+static void testLargeAmountsAnnualAndBreakdowns() {
+    static_assert(sizeof(SourceTotal::total) == 8, "SourceTotal must be 64-bit");
+    static_assert(sizeof(CategoryTotal::total) == 8, "CategoryTotal must be 64-bit");
+
+    AppState s;
+    buildLargeAmountFixture(s);
+
+    int y2025[] = {2025};
+    MoneySummary r2025;
+    CHECK_EQ(summarizeYears(s, y2025, 1, r2025), true);
+    CHECK_EQ(r2025.income, 3000000000LL);
+    CHECK_EQ(r2025.expense, 1200000000LL);
+    CHECK_EQ(r2025.net, 1800000000LL);
+
+    int y2026[] = {2026};
+    MoneySummary r2026;
+    CHECK_EQ(summarizeYears(s, y2026, 1, r2026), true);
+    CHECK_EQ(r2026.income, 4500000000LL);
+    CHECK_EQ(r2026.expense, 8500000000LL);
+    CHECK_EQ(r2026.net, -4000000000LL);
+
+    int repeatedBoth[] = {2025, 2026, 2026};
+    MoneySummary rAll;
+    CHECK_EQ(summarizeYears(s, repeatedBoth, 3, rAll), true);
+    CHECK_EQ(rAll.income, 7500000000LL);
+    CHECK_EQ(rAll.expense, 9700000000LL);
+    CHECK_EQ(rAll.net, -2200000000LL);
+
+    // Income by source: Salary 3.0B, Investment 4.5B, sum 7.5B.
+    DynamicArray<SourceTotal> srcRows;
+    CHECK_EQ(incomeBySource(s, repeatedBoth, 3, srcRows), true);
+    CHECK_EQ(srcRows.size(), 2);
+    CHECK_EQ(srcRows.at(0).sourceId, 1); CHECK_EQ(srcRows.at(0).total, 3000000000LL);
+    CHECK_EQ(srcRows.at(1).sourceId, 2); CHECK_EQ(srcRows.at(1).total, 4500000000LL);
+    CHECK_EQ(srcRows.at(0).total + srcRows.at(1).total, rAll.income);
+
+    // Expense by category: Housing 1.2B + 2.5B = 3.7B, Travel 6.0B, sum 9.7B.
+    DynamicArray<CategoryTotal> catRows;
+    CHECK_EQ(expenseByCategory(s, repeatedBoth, 3, catRows), true);
+    CHECK_EQ(catRows.size(), 2);
+    CHECK_EQ(catRows.at(0).categoryId, 1); CHECK_EQ(catRows.at(0).total, 3700000000LL);
+    CHECK_EQ(catRows.at(1).categoryId, 2); CHECK_EQ(catRows.at(1).total, 6000000000LL);
+    CHECK_EQ(catRows.at(0).total + catRows.at(1).total, rAll.expense);
+
+    // Single year 2026 breakdowns.
+    CHECK_EQ(incomeBySource(s, y2026, 1, srcRows), true);
+    CHECK_EQ(srcRows.at(0).total, 0);
+    CHECK_EQ(srcRows.at(1).total, 4500000000LL);
+
+    CHECK_EQ(expenseByCategory(s, y2026, 1, catRows), true);
+    CHECK_EQ(catRows.at(0).total, 2500000000LL);
+    CHECK_EQ(catRows.at(1).total, 6000000000LL);
+}
 
 int main() {
     testFixtureIsConsistent();
     testRangeInclusive();
     testSingleDayAndReversed();
+    testInvalidReportDateRanges();
+    testValidLeapDayRange();
+    testLeapYearBoundariesAnd30DayMonths();
     testEmptyRange();
     testNegativeNet();
     testWalletReportWholeRange();
@@ -328,8 +776,14 @@ int main() {
     testWalletReportReversedAndEmpty();
     testYearSummary();
     testYearSummaryEdgeCases();
+    testYearSummaryInvalidYears();
     testIncomeBySource();
     testExpenseByCategory();
+    testBreakdownInvalidYears();
+    testNonconsecutiveWalletIds();
+    testNonconsecutiveSourceAndCategoryIds();
+    testLargeAmountsRangeAndWallet();
+    testLargeAmountsAnnualAndBreakdowns();
     if (failures == 0) std::cout << "test_statistics: all checks passed\n";
     return failures == 0 ? 0 : 1;
 }
